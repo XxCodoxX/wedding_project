@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+/* ─── Wedding Theme Tokens ─── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Wedding palette */
+  --color-cream: #FFF8F0;
+  --color-cream-dark: #F5EDE3;
+  --color-burgundy: #722F37;
+  --color-burgundy-light: #9B4D55;
+  --color-burgundy-dark: #5A252C;
+  --color-navy: #1B2A4A;
+  --color-navy-light: #2A3D66;
+  --color-gold: #D4AF37;
+  --color-gold-light: #E8CC6E;
+  --color-gold-dark: #B8971F;
+  --color-sage: #9CAF88;
+  --color-sage-light: #B5C4A5;
+  --color-sage-dark: #7A8E6A;
+  --color-blush: #F2D7D5;
+  --color-blush-dark: #E5B8B4;
+  --color-rose: #C08B8B;
+
+  /* Admin dark palette */
+  --color-admin-bg: #0F1117;
+  --color-admin-card: #1A1D27;
+  --color-admin-border: #2A2D3A;
+  --color-admin-accent: #6366F1;
+  --color-admin-accent-light: #818CF8;
+  --color-admin-text: #E2E8F0;
+  --color-admin-text-muted: #94A3B8;
+  --color-admin-success: #22C55E;
+  --color-admin-danger: #EF4444;
+  --color-admin-warning: #F59E0B;
+
+  /* Fonts */
+  --font-cormorant: var(--font-cormorant);
+  --font-outfit: var(--font-outfit);
+}
+
+:root {
+  --background: #FFF8F0;
+  --foreground: #1B2A4A;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-outfit), "Outfit", system-ui, sans-serif;
+}
+
+/* ─── Scrollbar Styling ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 3px;
+}
+
+/* ─── Animations ─── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.5s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spinSlow 75s linear infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.15), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Stagger animation delays */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-700 { animation-delay: 0.7s; }
+.delay-800 { animation-delay: 0.8s; }
+
+/* ─── Invitation Typography ─── */
+.font-cormorant {
+  font-family: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+}
+
+.font-outfit {
+  font-family: var(--font-outfit), "Outfit", system-ui, sans-serif;
+}
+
+/* ─── Glass Effect ─── */
+.glass {
+  background: rgba(255, 248, 240, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.glass-dark {
+  background: rgba(26, 29, 39, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+/* ─── Admin Panel ─── */
+.admin-sidebar {
+  background: linear-gradient(180deg, #0F1117 0%, #151822 100%);
+}
+
+/* ─── Photo Gallery ─── */
+.photo-gallery-item {
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+
+.photo-gallery-item:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}

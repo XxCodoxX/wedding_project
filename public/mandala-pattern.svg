@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" fill="none">
+  <g opacity="0.9">
+    <!-- Outer ring with petals -->
+    <g stroke="#D4AF37" stroke-width="1.5" fill="none">
+      <!-- Outer circle -->
+      <circle cx="400" cy="400" r="380" opacity="0.3"/>
+      <circle cx="400" cy="400" r="370" opacity="0.2"/>
+      
+      <!-- Large outer petals (16 petals) -->
+      <g opacity="0.4">
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(22.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(45 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(67.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(90 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(112.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(135 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(157.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(180 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(202.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(225 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(247.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(270 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(292.5 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(315 400 400)"/>
+        <path d="M400 20 Q430 100 400 180 Q370 100 400 20Z" fill="#D4AF37" stroke="none" transform="rotate(337.5 400 400)"/>
+      </g>
+    </g>
+    
+    <!-- Second ring -->
+    <g stroke="#D4AF37" stroke-width="1" fill="none">
+      <circle cx="400" cy="400" r="300" opacity="0.35"/>
+      <circle cx="400" cy="400" r="290" opacity="0.2"/>
+      
+      <!-- Medium petals (12 petals) -->
+      <g opacity="0.35">
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(30 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(60 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(90 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(120 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(150 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(180 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(210 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(240 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(270 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(300 400 400)"/>
+        <path d="M400 100 Q425 170 400 240 Q375 170 400 100Z" fill="#D4AF37" stroke="none" transform="rotate(330 400 400)"/>
+      </g>
+    </g>
+    
+    <!-- Third ring - ornamental arcs -->
+    <g stroke="#D4AF37" stroke-width="0.8" fill="none" opacity="0.3">
+      <circle cx="400" cy="400" r="220"/>
+      <circle cx="400" cy="400" r="210"/>
+      
+      <!-- Small inner petals (8 petals) -->
+      <g opacity="0.5">
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(45 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(90 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(135 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(180 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(225 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(270 400 400)"/>
+        <path d="M400 180 Q418 230 400 280 Q382 230 400 180Z" fill="#D4AF37" stroke="none" transform="rotate(315 400 400)"/>
+      </g>
+    </g>
+    
+    <!-- Inner decorative circles -->
+    <g stroke="#D4AF37" fill="none" opacity="0.25">
+      <circle cx="400" cy="400" r="150" stroke-width="0.8"/>
+      <circle cx="400" cy="400" r="140" stroke-width="0.5" stroke-dasharray="4 6"/>
+      <circle cx="400" cy="400" r="100" stroke-width="0.8"/>
+      <circle cx="400" cy="400" r="90" stroke-width="0.5" stroke-dasharray="3 5"/>
+      <circle cx="400" cy="400" r="60" stroke-width="0.8"/>
+    </g>
+    
+    <!-- Tiny inner petals (6 petals) -->
+    <g opacity="0.3">
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none"/>
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none" transform="rotate(60 400 400)"/>
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none" transform="rotate(120 400 400)"/>
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none" transform="rotate(180 400 400)"/>
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none" transform="rotate(240 400 400)"/>
+      <path d="M400 280 Q412 320 400 360 Q388 320 400 280Z" fill="#D4AF37" stroke="none" transform="rotate(300 400 400)"/>
+    </g>
+    
+    <!-- Center dot -->
+    <circle cx="400" cy="400" r="8" fill="#D4AF37" opacity="0.3"/>
+    <circle cx="400" cy="400" r="4" fill="#D4AF37" opacity="0.5"/>
+    
+    <!-- Outer dot accents between petals -->
+    <g fill="#D4AF37" opacity="0.25">
+      <circle cx="400" cy="45" r="3"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(30 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(60 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(90 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(120 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(150 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(180 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(210 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(240 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(270 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(300 400 400)"/>
+      <circle cx="400" cy="45" r="3" transform="rotate(330 400 400)"/>
+    </g>
+    
+    <!-- Fine line star overlay -->
+    <g stroke="#D4AF37" stroke-width="0.5" opacity="0.15">
+      <line x1="400" y1="50" x2="400" y2="750"/>
+      <line x1="400" y1="50" x2="400" y2="750" transform="rotate(30 400 400)"/>
+      <line x1="400" y1="50" x2="400" y2="750" transform="rotate(60 400 400)"/>
+      <line x1="400" y1="50" x2="400" y2="750" transform="rotate(90 400 400)"/>
+      <line x1="400" y1="50" x2="400" y2="750" transform="rotate(120 400 400)"/>
+      <line x1="400" y1="50" x2="400" y2="750" transform="rotate(150 400 400)"/>
+    </g>
+  </g>
+</svg>

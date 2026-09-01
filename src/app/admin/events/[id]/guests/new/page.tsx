@@ -1,0 +1,51 @@
+import GuestForm from "@/components/admin/GuestForm";
+import { createGuest } from "@/lib/actions";
+import { createServerClient } from "@/lib/supabase";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import Breadcrumbs from "@/components/admin/Breadcrumbs";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function NewGuestPage({ params }: PageProps) {
+  const { id: weddingId } = await params;
+
+  const supabase = createServerClient();
+  const { data: wedding, error } = await supabase
+    .from("weddings")
+    .select("groom_name, bride_name")
+    .eq("id", weddingId)
+    .single();
+
+  if (error || !wedding) {
+    notFound();
+  }
+
+  return (
+    <div>
+      <div className="mb-4">
+        <Breadcrumbs items={[
+          { label: "Events", href: "/admin/events" },
+          { label: `${wedding.groom_name} & ${wedding.bride_name}`, href: `/admin/events/${weddingId}/dashboard` },
+          { label: "Add Guest" }
+        ]} />
+      </div>
+      
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-admin-text">
+          Add New Guest
+        </h1>
+        <p className="text-admin-text-muted text-sm mt-1">
+          Create a new guest entry and generate their personalized invitation
+          link
+        </p>
+      </div>
+
+      {/* Form */}
+      <GuestForm mode="create" onSubmit={createGuest} weddingId={weddingId} />
+    </div>
+  );
+}
