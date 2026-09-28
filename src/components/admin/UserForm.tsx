@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 
 interface WeddingOption {
   id: string;
@@ -104,7 +105,14 @@ export default function UserForm({ mode, profileId, initialData, weddings, onSub
   };
 
   return (
-    <form onSubmit={handleSubmit} className="glass-dark rounded-2xl p-6 sm:p-8 max-w-2xl space-y-6">
+    <form onSubmit={handleSubmit} className="glass-dark rounded-2xl p-6 sm:p-8 max-w-2xl space-y-6 relative overflow-hidden">
+      <SectionLoadingOverlay
+        isLoading={loading}
+        message={mode === "create" ? "Creating User..." : "Saving User..."}
+        submessage="Updating credentials and event permissions"
+        theme="admin"
+        rounded="2xl"
+      />
       {/* Full Name */}
       <div>
         <label htmlFor="full_name" className="block text-sm font-medium text-admin-text-muted mb-2">

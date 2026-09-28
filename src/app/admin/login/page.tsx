@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -46,7 +47,14 @@ export default function AdminLoginPage() {
 
       <div className="relative w-full max-w-md">
         {/* Card */}
-        <div className="glass-dark rounded-2xl p-8 shadow-2xl">
+        <div className="glass-dark rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          <SectionLoadingOverlay
+            isLoading={loading}
+            message="Authenticating..."
+            submessage="Verifying admin credentials & session"
+            theme="admin"
+            rounded="2xl"
+          />
           {/* Logo / Title */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-admin-accent/10 mb-4">

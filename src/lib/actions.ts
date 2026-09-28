@@ -277,6 +277,9 @@ export async function createGuest(formData: FormData) {
   const weddingId = formData.get("wedding_id") as string;
   const guestName = formData.get("guest_name") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
+  const invitationType = (formData.get("invitation_type") as string) || "individual";
+  const groupLabel = (formData.get("group_label") as string) || null;
+  const membersJson = (formData.get("members") as string) || null;
 
   if (!weddingId?.trim()) {
     return { error: "Wedding ID is required" };
@@ -293,23 +296,80 @@ export async function createGuest(formData: FormData) {
 
   const supabase = createServerClient();
 
-  // Insert guest row
-  const { data: guest, error: insertError } = await supabase
-    .from("guests")
-    .insert({
-      wedding_id: weddingId,
-      guest_name: guestName.trim(),
-      custom_message: customMessage?.trim() || null,
-    })
-    .select()
-    .single();
+  // ---------- Individual invitation ----------
+  if (invitationType === "individual") {
+    const { data: guest, error: insertError } = await supabase
+      .from("guests")
+      .insert({
+        wedding_id: weddingId,
+        guest_name: guestName.trim(),
+        custom_message: customMessage?.trim() || null,
+        invitation_type: "individual",
+        group_id: null,
+        group_label: null,
+        is_primary: true,
+      })
+      .select()
+      .single();
 
-  if (insertError || !guest) {
-    return { error: insertError?.message || "Failed to create guest" };
+    if (insertError || !guest) {
+      return { error: insertError?.message || "Failed to create guest" };
+    }
+
+    revalidatePath(`/admin/events/${weddingId}/dashboard`);
+    return { success: true, guestId: guest.id };
   }
 
+  // ---------- Couple or Family invitation ----------
+  let members: string[] = [];
+  if (membersJson) {
+    try {
+      members = JSON.parse(membersJson);
+    } catch {
+      return { error: "Invalid members data" };
+    }
+  }
+
+  if (invitationType === "couple" && members.length !== 2) {
+    return { error: "Couple invitation requires exactly 2 members" };
+  }
+  if (invitationType === "family" && members.length < 2) {
+    return { error: "Family invitation requires at least 2 members" };
+  }
+
+  // Validate all members have names
+  const trimmedMembers = members.map((m) => m.trim()).filter(Boolean);
+  if (trimmedMembers.length !== members.length) {
+    return { error: "All member names are required" };
+  }
+
+  const effectiveGroupLabel = groupLabel?.trim() || guestName.trim();
+  const groupId = crypto.randomUUID();
+
+  // Insert all members in one batch
+  const memberRows = trimmedMembers.map((memberName, idx) => ({
+    wedding_id: weddingId,
+    guest_name: memberName,
+    custom_message: idx === 0 ? (customMessage?.trim() || null) : null,
+    invitation_type: invitationType,
+    group_id: groupId,
+    group_label: effectiveGroupLabel,
+    is_primary: idx === 0,
+  }));
+
+  const { data: insertedGuests, error: insertError } = await supabase
+    .from("guests")
+    .insert(memberRows)
+    .select();
+
+  if (insertError || !insertedGuests || insertedGuests.length === 0) {
+    return { error: insertError?.message || "Failed to create guest group" };
+  }
+
+  const primaryGuest = insertedGuests.find((g: any) => g.is_primary) || insertedGuests[0];
+
   revalidatePath(`/admin/events/${weddingId}/dashboard`);
-  return { success: true, guestId: guest.id };
+  return { success: true, guestId: primaryGuest.id };
 }
 
 // ---------- Update Guest ----------
@@ -319,6 +379,9 @@ export async function updateGuest(guestId: string, formData: FormData) {
   const weddingId = formData.get("wedding_id") as string;
   const guestName = formData.get("guest_name") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
+  const invitationType = (formData.get("invitation_type") as string) || "individual";
+  const groupLabel = (formData.get("group_label") as string) || null;
+  const membersJson = (formData.get("members") as string) || null;
 
   let targetWeddingId = weddingId;
   if (!targetWeddingId) {
@@ -341,17 +404,123 @@ export async function updateGuest(guestId: string, formData: FormData) {
     return { error: "Guest name is required" };
   }
 
-  // Update guest row
-  const { error: updateError } = await supabase
-    .from("guests")
-    .update({
-      guest_name: guestName.trim(),
-      custom_message: customMessage?.trim() || null,
-    })
-    .eq("id", guestId);
+  // ---------- Individual invitation ----------
+  if (invitationType === "individual") {
+    // First, get the existing guest to check if it was previously a group
+    const { data: existing } = await supabase
+      .from("guests")
+      .select("group_id")
+      .eq("id", guestId)
+      .single();
 
-  if (updateError) {
-    return { error: updateError.message };
+    // If converting from group to individual, delete other group members
+    if (existing?.group_id) {
+      await supabase
+        .from("guests")
+        .delete()
+        .eq("group_id", existing.group_id)
+        .neq("id", guestId);
+    }
+
+    const { error: updateError } = await supabase
+      .from("guests")
+      .update({
+        guest_name: guestName.trim(),
+        custom_message: customMessage?.trim() || null,
+        invitation_type: "individual",
+        group_id: null,
+        group_label: null,
+        is_primary: true,
+      })
+      .eq("id", guestId);
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    if (targetWeddingId) {
+      revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
+      revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
+    }
+    return { success: true, guestId };
+  }
+
+  // ---------- Couple or Family invitation ----------
+  let members: { id?: string; name: string }[] = [];
+  if (membersJson) {
+    try {
+      members = JSON.parse(membersJson);
+    } catch {
+      return { error: "Invalid members data" };
+    }
+  }
+
+  if (invitationType === "couple" && members.length !== 2) {
+    return { error: "Couple invitation requires exactly 2 members" };
+  }
+  if (invitationType === "family" && members.length < 2) {
+    return { error: "Family invitation requires at least 2 members" };
+  }
+
+  // Get existing guest to find current group_id
+  const { data: existing } = await supabase
+    .from("guests")
+    .select("group_id")
+    .eq("id", guestId)
+    .single();
+
+  const effectiveGroupLabel = groupLabel?.trim() || guestName.trim();
+  const groupId = existing?.group_id || crypto.randomUUID();
+
+  // Get existing group members
+  let existingMemberIds: string[] = [];
+  if (existing?.group_id) {
+    const { data: existingMembers } = await supabase
+      .from("guests")
+      .select("id")
+      .eq("group_id", existing.group_id);
+    existingMemberIds = (existingMembers || []).map((m: any) => m.id);
+  }
+
+  // Figure out which members to keep, add, or remove
+  const incomingIds = members.filter((m) => m.id).map((m) => m.id as string);
+  const toDelete = existingMemberIds.filter((id) => id !== guestId && !incomingIds.includes(id));
+  const toInsert = members.filter((m) => !m.id);
+  const toUpdate = members.filter((m) => m.id);
+
+  // Delete removed members
+  if (toDelete.length > 0) {
+    await supabase.from("guests").delete().in("id", toDelete);
+  }
+
+  // Update existing members
+  for (const member of toUpdate) {
+    const isPrimary = member.id === guestId;
+    await supabase
+      .from("guests")
+      .update({
+        guest_name: member.name.trim(),
+        custom_message: isPrimary ? (customMessage?.trim() || null) : null,
+        invitation_type: invitationType,
+        group_id: groupId,
+        group_label: effectiveGroupLabel,
+        is_primary: isPrimary,
+      })
+      .eq("id", member.id!);
+  }
+
+  // Insert new members
+  if (toInsert.length > 0 && targetWeddingId) {
+    const newRows = toInsert.map((m) => ({
+      wedding_id: targetWeddingId!,
+      guest_name: m.name.trim(),
+      custom_message: null,
+      invitation_type: invitationType,
+      group_id: groupId,
+      group_label: effectiveGroupLabel,
+      is_primary: false,
+    }));
+    await supabase.from("guests").insert(newRows);
   }
 
   if (targetWeddingId) {
@@ -366,12 +535,15 @@ export async function deleteGuest(guestId: string, weddingId?: string) {
   const supabase = createServerClient();
 
   let targetWeddingId = weddingId;
+
+  // Fetch the guest to find group_id and wedding_id
+  const { data: guest } = await supabase
+    .from("guests")
+    .select("wedding_id, group_id")
+    .eq("id", guestId)
+    .single();
+
   if (!targetWeddingId) {
-    const { data: guest } = await supabase
-      .from("guests")
-      .select("wedding_id")
-      .eq("id", guestId)
-      .single();
     targetWeddingId = guest?.wedding_id;
   }
 
@@ -382,11 +554,23 @@ export async function deleteGuest(guestId: string, weddingId?: string) {
     }
   }
 
-  // Delete the guest row
-  const { error } = await supabase.from("guests").delete().eq("id", guestId);
+  // If this guest is part of a group, delete all group members
+  if (guest?.group_id) {
+    const { error } = await supabase
+      .from("guests")
+      .delete()
+      .eq("group_id", guest.group_id);
 
-  if (error) {
-    return { error: error.message };
+    if (error) {
+      return { error: error.message };
+    }
+  } else {
+    // Delete just this individual guest
+    const { error } = await supabase.from("guests").delete().eq("id", guestId);
+
+    if (error) {
+      return { error: error.message };
+    }
   }
 
   if (targetWeddingId) {

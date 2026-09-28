@@ -47,6 +47,18 @@ export default async function InvitePage({ params }: PageProps) {
 
   const typedGuest = guest as Guest;
 
+  // Fetch group members if this is a couple/family invitation
+  let groupMembers: Guest[] = [];
+  if (typedGuest.group_id) {
+    const { data: members } = await supabase
+      .from("guests")
+      .select("*")
+      .eq("group_id", typedGuest.group_id)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: true });
+    groupMembers = (members as Guest[]) || [];
+  }
+
   const templateDefinition = getTemplateById(wedding.template_id);
   if (!templateDefinition) {
     return <NotFoundPage />;
@@ -55,7 +67,11 @@ export default async function InvitePage({ params }: PageProps) {
   const TemplateComponent = templateDefinition.component;
 
   return (
-    <TemplateComponent wedding={wedding} guest={typedGuest} />
+    <TemplateComponent
+      wedding={wedding}
+      guest={typedGuest}
+      groupMembers={groupMembers.length > 0 ? groupMembers : undefined}
+    />
   );
 }
 

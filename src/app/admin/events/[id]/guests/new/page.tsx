@@ -39,18 +39,17 @@ export default async function NewGuestPage({ params }: PageProps) {
         <Breadcrumbs items={[
           { label: "Events", href: "/admin/events" },
           { label: `${wedding.groom_name} & ${wedding.bride_name}`, href: `/admin/events/${weddingId}/dashboard` },
-          { label: "Add Guest" }
+          { label: "Add Invitation" }
         ]} />
       </div>
       
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-xl sm:text-2xl font-semibold text-admin-text">
-          Add New Guest
+          Add Invitation
         </h1>
         <p className="text-admin-text-muted text-sm mt-1">
-          Create a new guest entry and generate their personalized invitation
-          link
+          Create an individual, couple, or family invitation with a personalized link
         </p>
       </div>
 

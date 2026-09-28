@@ -27,6 +27,10 @@ export interface Guest {
   wedding_id: string;
   guest_name: string;
   custom_message: string | null;
+  invitation_type: "individual" | "couple" | "family";
+  group_id: string | null;
+  group_label: string | null;
+  is_primary: boolean;
   rsvp_status: "pending" | "attending" | "not_attending";
   created_at: string;
 }

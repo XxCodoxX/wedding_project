@@ -6,7 +6,7 @@ import EventDetails from "@/components/invite/EventDetails";
 import Footer from "@/components/invite/Footer";
 import { TemplateProps } from "./registry";
 
-export default function ClassicTemplate({ wedding, guest, isPreview }: TemplateProps) {
+export default function ClassicTemplate({ wedding, guest, groupMembers, isPreview }: TemplateProps) {
   const guestCustomMsg =
     guest?.custom_message && guest.custom_message.trim() !== guest?.guest_name?.trim()
       ? guest.custom_message.trim()
@@ -27,7 +27,7 @@ export default function ClassicTemplate({ wedding, guest, isPreview }: TemplateP
       {/* Guest Greeting */}
       {guest && (
         <GuestGreeting
-          guestName={guest.guest_name}
+          guestName={guest.group_label || guest.guest_name}
           customMessage={guestCustomMsg || wedding.custom_message}
         />
       )}
@@ -56,6 +56,15 @@ export default function ClassicTemplate({ wedding, guest, isPreview }: TemplateP
           guestId={guest?.id || "mock-guest-id"}
           guestName={guest?.guest_name || "John Doe"}
           currentStatus={guest?.rsvp_status || "pending"}
+          groupMembers={
+            groupMembers && groupMembers.length > 1
+              ? groupMembers.map((m) => ({
+                  id: m.id,
+                  name: m.guest_name,
+                  currentStatus: m.rsvp_status,
+                }))
+              : undefined
+          }
         />
       </div>
 

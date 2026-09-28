@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import TemplatePreviewModal from "./TemplatePreviewModal";
 import PhotoUploader from "./PhotoUploader";
+import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import { TEMPLATE_REGISTRY, TemplateDefinition } from "@/templates/registry";
 import type { AgendaItem } from "@/lib/supabase";
 
@@ -246,7 +247,14 @@ export default function WeddingForm({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 relative overflow-hidden rounded-2xl">
+          <SectionLoadingOverlay
+            isLoading={loading}
+            message={mode === "create" ? "Creating Wedding Event..." : "Saving Event Changes..."}
+            submessage="Uploading photos to cloud storage & updating details..."
+            theme="admin"
+            rounded="2xl"
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-admin-text-muted mb-2">

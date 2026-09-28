@@ -19,7 +19,7 @@ const cinzel = Cinzel({ subsets: ["latin"], weight: ["400", "600", "700"], displ
  * Tapping "Open Invitation" reveals the second screen (InvitationScreen)
  * with a solid fixed background (image + rotating mandala) and full invitation details.
  */
-export default function OrnateTemplate({ wedding, guest, isPreview }: TemplateProps) {
+export default function OrnateTemplate({ wedding, guest, groupMembers, isPreview }: TemplateProps) {
   const [isOpened, setIsOpened] = useState(false);
 
   const dateObj = new Date(wedding.wedding_date);
@@ -53,6 +53,7 @@ export default function OrnateTemplate({ wedding, guest, isPreview }: TemplatePr
     <InvitationScreen
       wedding={wedding}
       guest={guest}
+      groupMembers={groupMembers}
       isPreview={isPreview}
       backgroundImage={backgroundImage}
       dateObj={dateObj}
@@ -67,12 +68,13 @@ export default function OrnateTemplate({ wedding, guest, isPreview }: TemplatePr
 interface InvitationScreenProps {
   wedding: TemplateProps["wedding"];
   guest: TemplateProps["guest"];
+  groupMembers?: TemplateProps["groupMembers"];
   isPreview?: boolean;
   backgroundImage: string;
   dateObj: Date;
 }
 
-function InvitationScreen({ wedding, guest, isPreview, backgroundImage, dateObj }: InvitationScreenProps) {
+function InvitationScreen({ wedding, guest, groupMembers, isPreview, backgroundImage, dateObj }: InvitationScreenProps) {
   const venueName = wedding.venue_name || (wedding as any).venue;
   const venueAddress = wedding.venue_location || (wedding as any).venue_address || (wedding as any).location;
   const mapUrl =
@@ -85,7 +87,8 @@ function InvitationScreen({ wedding, guest, isPreview, backgroundImage, dateObj 
         )}`
       : undefined);
 
-  const guestName = guest?.guest_name ?? (isPreview ? "John Doe" : undefined);
+  // For couple/family invitations, use group_label as the greeting name
+  const guestName = guest?.group_label || guest?.guest_name || (isPreview ? "John Doe" : undefined);
   const guestCustomMsg =
     guest?.custom_message && guest.custom_message.trim() !== guest?.guest_name?.trim()
       ? guest.custom_message.trim()
@@ -315,7 +318,7 @@ function InvitationScreen({ wedding, guest, isPreview, backgroundImage, dateObj 
               A PERSONAL NOTE
             </p>
             <p className={`${script.className} text-3xl sm:text-4xl mt-3 text-[#1A2F6C]`}>
-              Dearest {guest?.guest_name ? guest.guest_name : "Honoured Guest"},
+              Dearest {guestName || "Honoured Guest"},
             </p>
             <p className="font-cormorant text-lg sm:text-xl leading-8 mt-3 text-[#0D1B3E]/90 first-letter:float-left first-letter:text-5xl first-letter:leading-[0.85] first-letter:mr-0.5 first-letter:font-semibold first-letter:text-[#D4AF37]">
               {letter}
@@ -458,6 +461,15 @@ function InvitationScreen({ wedding, guest, isPreview, backgroundImage, dateObj 
                   guestId={guest?.id || "mock-guest-id"}
                   guestName={guest?.guest_name || "John Doe"}
                   currentStatus={guest?.rsvp_status || "pending"}
+                  groupMembers={
+                    groupMembers && groupMembers.length > 1
+                      ? groupMembers.map((m) => ({
+                          id: m.id,
+                          name: m.guest_name,
+                          currentStatus: m.rsvp_status,
+                        }))
+                      : undefined
+                  }
                 />
               </div>
             </div>

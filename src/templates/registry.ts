@@ -6,6 +6,7 @@ import type { Wedding, Guest } from "@/lib/supabase";
 export interface TemplateProps {
   wedding: Wedding;
   guest?: Guest;
+  groupMembers?: Guest[];
   isPreview?: boolean;
 }
 
