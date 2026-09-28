@@ -145,6 +145,7 @@ export default function AdminShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-admin-accent/15 text-admin-accent-light"

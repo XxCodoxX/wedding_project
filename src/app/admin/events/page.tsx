@@ -76,6 +76,7 @@ export default async function EventsPage() {
         {isAdmin && (
           <Link
             href="/admin/events/new"
+            prefetch={false}
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200 w-full sm:w-auto"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -135,12 +136,14 @@ export default async function EventsPage() {
               <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4 pt-4 border-t border-admin-border/50">
                 <Link
                   href={`/admin/events/${wedding.id}/dashboard`}
+                  prefetch={false}
                   className="flex-1 text-center py-2 rounded-lg bg-admin-accent/10 text-admin-accent hover:bg-admin-accent hover:text-white transition-all text-sm font-medium"
                 >
                   Manage Guests
                 </Link>
                 <Link
                   href={`/admin/events/${wedding.id}/edit`}
+                  prefetch={false}
                   className="p-2 rounded-lg bg-admin-border/10 text-admin-text-muted hover:bg-admin-border/30 hover:text-admin-text transition-all"
                   title="Edit Event"
                 >
