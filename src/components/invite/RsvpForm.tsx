@@ -143,7 +143,7 @@ function SingleRsvpForm({
           </div>
         ) : (
           /* Form */
-          <div className="glass rounded-2xl p-8 space-y-6 relative overflow-hidden">
+          <div className="glass rounded-2xl p-5 sm:p-8 space-y-6 relative overflow-hidden">
             <SectionLoadingOverlay
               isLoading={loading}
               message="Confirming Attendance..."
@@ -159,10 +159,10 @@ function SingleRsvpForm({
             )}
 
             {/* Status Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <button
                 onClick={() => setStatus("attending")}
-                className={`group relative p-5 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                className={`group relative p-4 sm:p-5 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
                   status === "attending"
                     ? "border-sage bg-sage/10 shadow-lg shadow-sage/10"
                     : "border-gold/20 hover:border-sage/50 hover:bg-sage/5"
@@ -232,11 +232,11 @@ function SingleRsvpForm({
             <button
               onClick={handleSubmit}
               disabled={!status || loading}
-              className={`w-full inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-outfit text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all duration-300 ${
+              className={`w-full inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full font-outfit text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all duration-300 ${
                 status
-                  ? "bg-[#f8df52e1] hover:bg-gold text-[#0D1B3E] cursor-pointer"
-                  : "bg-navy/10 text-navy/30 cursor-not-allowed"
-              } disabled:opacity-50`}
+                  ? "bg-[#f8df52e1] hover:bg-gold text-[#0D1B3E] cursor-pointer shadow-md shadow-gold/20"
+                  : "bg-navy/10 text-navy/40 border border-navy/10 cursor-not-allowed"
+              } disabled:opacity-75`}
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
@@ -381,7 +381,7 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
           </div>
         ) : (
           /* Form */
-          <div className="glass rounded-2xl p-6 sm:p-8 space-y-5 relative overflow-hidden">
+          <div className="glass rounded-2xl p-4 sm:p-7 space-y-5 relative overflow-hidden">
             <SectionLoadingOverlay
               isLoading={loading}
               message="Confirming Attendance..."
@@ -403,36 +403,40 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
                 return (
                   <div
                     key={member.id}
-                    className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 rounded-xl bg-white/50 border border-gold/15"
+                    className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl bg-white/70 border border-gold/20 shadow-2xs transition-all"
                   >
-                    <div className="flex-1 text-left">
-                      <p className="font-cormorant text-lg text-navy font-semibold">
+                    <div className="text-left min-w-0">
+                      <p className="font-cormorant text-lg sm:text-xl text-navy font-semibold truncate">
                         {member.name}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+
+                    {/* Buttons: 50/50 grid on mobile, flex on desktop */}
+                    <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:shrink-0">
                       <button
+                        type="button"
                         onClick={() => setMemberStatus(member.id, "attending")}
-                        className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold font-outfit tracking-wide uppercase transition-all duration-200 cursor-pointer ${
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           s === "attending"
-                            ? "bg-sage text-white shadow-sm shadow-sage/25"
-                            : "bg-sage/10 text-sage hover:bg-sage/20 border border-sage/20"
+                            ? "bg-sage text-white shadow-md shadow-sage/30 border border-sage font-bold"
+                            : "bg-white/80 hover:bg-sage/10 text-sage-dark border border-sage/35 hover:border-sage shadow-2xs"
                         }`}
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                         </svg>
                         Accept
                       </button>
                       <button
+                        type="button"
                         onClick={() => setMemberStatus(member.id, "not_attending")}
-                        className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold font-outfit tracking-wide uppercase transition-all duration-200 cursor-pointer ${
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           s === "not_attending"
-                            ? "bg-rose text-white shadow-sm shadow-rose/25"
-                            : "bg-rose/10 text-rose hover:bg-rose/20 border border-rose/20"
+                            ? "bg-rose text-white shadow-md shadow-rose/30 border border-rose font-bold"
+                            : "bg-white/80 hover:bg-rose/10 text-rose border border-rose/35 hover:border-rose shadow-2xs"
                         }`}
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                         Decline
@@ -468,11 +472,11 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
             <button
               onClick={handleSubmit}
               disabled={!allSelected || loading}
-              className={`w-full inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-outfit text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all duration-300 ${
+              className={`w-full inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full font-outfit text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all duration-300 ${
                 allSelected
-                  ? "bg-[#f8df52e1] hover:bg-gold text-[#0D1B3E] cursor-pointer"
-                  : "bg-navy/10 text-navy/30 cursor-not-allowed"
-              } disabled:opacity-50`}
+                  ? "bg-[#f8df52e1] hover:bg-gold text-[#0D1B3E] cursor-pointer shadow-md shadow-gold/20"
+                  : "bg-navy/10 text-navy/45 border border-navy/10 cursor-not-allowed"
+              } disabled:opacity-75`}
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
@@ -482,8 +486,10 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
                   </svg>
                   Confirming Attendance...
                 </span>
-              ) : (
+              ) : allSelected ? (
                 "Confirm Attendance"
+              ) : (
+                `Select Attendance for All Members (${Object.values(memberStatuses).filter((v) => v !== null).length}/${groupMembers.length})`
               )}
             </button>
           </div>
