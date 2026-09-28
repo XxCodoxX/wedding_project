@@ -28,7 +28,7 @@ export default function GuestGreeting({
           You are cordially invited
         </p>
 
-        <h2 className="font-cormorant text-4xl sm:text-5xl font-light text-navy mb-6">
+        <h2 className="font-cormorant text-3xl sm:text-5xl font-light text-navy mb-6">
           Dear{" "}
           <span className="text-burgundy italic">{guestName}</span>
         </h2>

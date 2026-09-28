@@ -1,39 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-
-const COOKIE_NAME = "admin_session";
-
-function getSecretKey(): Uint8Array {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) return new Uint8Array(0);
-  return new TextEncoder().encode(secret);
-}
+import { createAuthMiddlewareClient } from "@/lib/supabase-auth";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect /admin/* routes, except /admin/login
-  if (!pathname.startsWith("/admin") || pathname === "/admin/login") {
+  // Only protect /admin routes (except /admin/login)
+  if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
 
-  const sessionToken = request.cookies.get(COOKIE_NAME)?.value;
+  // Allow the login page through
+  if (pathname === "/admin/login") {
+    const { user, response } = await createAuthMiddlewareClient(request);
 
-  if (!sessionToken) {
-    return NextResponse.redirect(new URL("/admin/login", request.url));
-  }
+    // If already logged in, redirect to events
+    if (user) {
+      return NextResponse.redirect(new URL("/admin/events", request.url));
+    }
 
-  try {
-    await jwtVerify(sessionToken, getSecretKey());
-    return NextResponse.next();
-  } catch {
-    // Invalid or expired token
-    const response = NextResponse.redirect(
-      new URL("/admin/login", request.url)
-    );
-    response.cookies.delete(COOKIE_NAME);
     return response;
   }
+
+  // For all other /admin routes, require authentication
+  const { user, response } = await createAuthMiddlewareClient(request);
+
+  if (!user) {
+    const loginUrl = new URL("/admin/login", request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return response;
 }
 
 export const config = {

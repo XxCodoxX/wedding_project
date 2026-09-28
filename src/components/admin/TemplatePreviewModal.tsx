@@ -66,7 +66,7 @@ export default function TemplatePreviewModal({
       </div>
 
       {/* Preview Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <TemplateComponent wedding={mockWedding as any} isPreview={true} />
       </div>
     </div>

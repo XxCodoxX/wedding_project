@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
@@ -41,8 +41,8 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-admin-bg px-4">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-admin-accent/5 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full bg-purple-500/5 blur-3xl" />
+        <div className="absolute top-0 right-0 w-48 h-48 sm:w-96 sm:h-96 rounded-full bg-admin-accent/5 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 sm:w-96 sm:h-96 rounded-full bg-purple-500/5 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
@@ -74,20 +74,20 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
-                htmlFor="username"
+                htmlFor="email"
                 className="block text-sm font-medium text-admin-text-muted mb-2"
               >
-                Username
+                Email
               </label>
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 rounded-xl bg-admin-bg border border-admin-border text-admin-text placeholder-admin-text-muted/50 focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all"
-                placeholder="Enter username"
-                autoComplete="username"
+                placeholder="Enter email"
+                autoComplete="email"
               />
             </div>
 

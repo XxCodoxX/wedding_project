@@ -5,7 +5,8 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/admin/Breadcrumbs";
 import DeleteGuestButton from "./DeleteGuestButton";
 import CopyLinkButtonClient from "./CopyLinkButtonClient";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getUserProfile, canAccessWedding } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,17 @@ interface PageProps {
 }
 
 export default async function DashboardPage({ params }: PageProps) {
+  const profile = await getUserProfile();
+  if (!profile) {
+    redirect("/admin/login");
+  }
+
   const { id: weddingId } = await params;
+  const hasAccess = await canAccessWedding(weddingId);
+  if (!hasAccess) {
+    redirect("/admin/events");
+  }
+
   const supabase = createServerClient();
 
   // Fetch wedding to ensure it exists and get its details
@@ -52,9 +63,9 @@ export default async function DashboardPage({ params }: PageProps) {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-admin-text">
+          <h1 className="text-xl sm:text-2xl font-semibold text-admin-text">
             {wedding.groom_name} & {wedding.bride_name}&apos;s Wedding
           </h1>
           <p className="text-admin-text-muted text-sm mt-1">
@@ -63,7 +74,7 @@ export default async function DashboardPage({ params }: PageProps) {
         </div>
         <Link
           href={`/admin/events/${weddingId}/guests/new`}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200 w-full sm:w-auto"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -129,76 +140,126 @@ export default async function DashboardPage({ params }: PageProps) {
           </Link>
         </div>
       ) : (
-        <div className="glass-dark rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-admin-border">
-                  <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                    Guest
-                  </th>
-                  <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                    RSVP Status
-                  </th>
-                  <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                    Invite Link
-                  </th>
-                  <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                    Created
-                  </th>
-                  <th className="text-right text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-admin-border/50">
-                {guestList.map((guest) => {
-                  const inviteCode = encryptGuestId(guest.id);
-                  return (
-                    <tr
-                      key={guest.id}
-                      className="hover:bg-admin-border/10 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-admin-text">
-                          {guest.guest_name}
-                        </div>
-                        {guest.custom_message && (
-                          <div className="text-xs text-admin-text-muted truncate max-w-[200px]">
-                            {guest.custom_message}
+        <>
+          {/* Desktop Table View */}
+          <div className="glass-dark rounded-2xl overflow-hidden hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-admin-border">
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Guest
+                    </th>
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      RSVP Status
+                    </th>
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Invite Link
+                    </th>
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Created
+                    </th>
+                    <th className="text-right text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-admin-border/50">
+                  {guestList.map((guest) => {
+                    const inviteCode = encryptGuestId(guest.id);
+                    return (
+                      <tr
+                        key={guest.id}
+                        className="hover:bg-admin-border/10 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-admin-text">
+                            {guest.guest_name}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <RsvpBadge status={guest.rsvp_status} />
-                      </td>
-                      <td className="px-6 py-4">
-                        <CopyLinkButton code={inviteCode} />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-admin-text-muted">
-                        {new Date(guest.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/admin/events/${weddingId}/guests/${guest.id}/edit`}
-                            className="p-2 rounded-lg text-admin-text-muted hover:text-admin-accent hover:bg-admin-accent/10 transition-all"
-                            title="Edit"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                            </svg>
-                          </Link>
-                          <DeleteGuestButton guestId={guest.id} guestName={guest.guest_name} weddingId={weddingId} />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {guest.custom_message && (
+                            <div className="text-xs text-admin-text-muted truncate max-w-50">
+                              {guest.custom_message}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <RsvpBadge status={guest.rsvp_status} />
+                        </td>
+                        <td className="px-6 py-4">
+                          <CopyLinkButton code={inviteCode} />
+                        </td>
+                        <td className="px-6 py-4 text-sm text-admin-text-muted">
+                          {new Date(guest.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              href={`/admin/events/${weddingId}/guests/${guest.id}/edit`}
+                              className="p-2 rounded-lg text-admin-text-muted hover:text-admin-accent hover:bg-admin-accent/10 transition-all"
+                              title="Edit"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                              </svg>
+                            </Link>
+                            <DeleteGuestButton guestId={guest.id} guestName={guest.guest_name} weddingId={weddingId} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Mobile Card View */}
+          <div className="space-y-3 md:hidden">
+            {guestList.map((guest) => {
+              const inviteCode = encryptGuestId(guest.id);
+              return (
+                <div
+                  key={guest.id}
+                  className="glass-dark rounded-2xl p-4"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-admin-text truncate">
+                        {guest.guest_name}
+                      </div>
+                      {guest.custom_message && (
+                        <div className="text-xs text-admin-text-muted truncate mt-0.5">
+                          {guest.custom_message}
+                        </div>
+                      )}
+                    </div>
+                    <RsvpBadge status={guest.rsvp_status} />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-admin-border/50">
+                    <div className="flex items-center gap-2">
+                      <CopyLinkButton code={inviteCode} />
+                      <span className="text-xs text-admin-text-muted">
+                        {new Date(guest.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/admin/events/${weddingId}/guests/${guest.id}/edit`}
+                        className="p-2 rounded-lg text-admin-text-muted hover:text-admin-accent hover:bg-admin-accent/10 transition-all"
+                        title="Edit"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                        </svg>
+                      </Link>
+                      <DeleteGuestButton guestId={guest.id} guestName={guest.guest_name} weddingId={weddingId} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

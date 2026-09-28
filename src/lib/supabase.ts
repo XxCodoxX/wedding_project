@@ -24,6 +24,17 @@ export interface Guest {
   created_at: string;
 }
 
+export interface UserProfile {
+  id: string;
+  auth_user_id: string;
+  email: string;
+  full_name: string;
+  role: "admin" | "guest";
+  assigned_wedding_id: string | null;
+  created_at: string;
+}
+
+
 // ---------- Browser Client (public, anon key — for client-side storage uploads) ----------
 let browserClient: SupabaseClient | null = null;
 

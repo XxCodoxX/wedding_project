@@ -1,62 +1,110 @@
 import { createServerClient } from "@/lib/supabase";
 import type { Wedding } from "@/lib/supabase";
+import { getUserProfile, getAuthUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import DeleteEventButton from "./DeleteEventButton";
 
 export const dynamic = "force-dynamic";
 
 export default async function EventsPage() {
+  const user = await getAuthUser();
+  if (!user) {
+    redirect("/admin/login");
+  }
+
+  const profile = await getUserProfile();
+
+  if (!profile) {
+    return (
+      <div className="glass-dark rounded-2xl p-12 text-center max-w-md mx-auto my-12">
+        <div className="text-5xl mb-4">⚠️</div>
+        <h2 className="text-xl font-semibold text-admin-text mb-2">Account Setup Pending</h2>
+        <p className="text-admin-text-muted text-sm mb-6">
+          Your account is authenticated, but no profile or role has been configured yet.
+        </p>
+        <Link
+          href="/admin/logout"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all"
+        >
+          Sign Out
+        </Link>
+      </div>
+    );
+  }
+
+  const isAdmin = profile.role === "admin";
   const supabase = createServerClient();
 
-  const { data: weddings, error } = await supabase
-    .from("weddings")
-    .select("*")
-    .order("created_at", { ascending: false });
+  let weddingList: Wedding[] = [];
 
-  const weddingList: Wedding[] = weddings || [];
+  if (isAdmin) {
+    // Admin sees all events
+    const { data: weddings } = await supabase
+      .from("weddings")
+      .select("*")
+      .order("created_at", { ascending: false });
+    weddingList = weddings || [];
+  } else {
+    // Guest user sees only their assigned event
+    if (profile.assigned_wedding_id) {
+      const { data: wedding } = await supabase
+        .from("weddings")
+        .select("*")
+        .eq("id", profile.assigned_wedding_id)
+        .single();
+      if (wedding) {
+        weddingList = [wedding];
+      }
+    }
+  }
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-admin-text">Events (Weddings)</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-admin-text">
+            {isAdmin ? "Events (Weddings)" : "My Event"}
+          </h1>
           <p className="text-admin-text-muted text-sm mt-1">
-            Manage your weddings and their guests
+            {isAdmin
+              ? "Manage your weddings and their guests"
+              : "Manage your assigned wedding event"}
           </p>
         </div>
-        <Link
-          href="/admin/events/new"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Event
-        </Link>
+        {isAdmin && (
+          <Link
+            href="/admin/events/new"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200 w-full sm:w-auto"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Event
+          </Link>
+        )}
       </div>
-
-      {error && (
-        <div className="p-4 rounded-xl bg-admin-danger/10 border border-admin-danger/20 text-admin-danger text-sm mb-6">
-          Failed to load events: {error.message}
-        </div>
-      )}
 
       {weddingList.length === 0 ? (
         <div className="glass-dark rounded-2xl p-12 text-center">
           <div className="text-5xl mb-4">🎉</div>
           <h3 className="text-lg font-medium text-admin-text mb-2">
-            No events yet
+            {isAdmin ? "No events yet" : "No event assigned"}
           </h3>
           <p className="text-admin-text-muted text-sm mb-6">
-            Start by creating a wedding event to start adding guests.
+            {isAdmin
+              ? "Start by creating a wedding event to start adding guests."
+              : "An admin needs to assign you to a wedding event."}
           </p>
-          <Link
-            href="/admin/events/new"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200"
-          >
-            Create Your First Event
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/admin/events/new"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200"
+            >
+              Create Your First Event
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -84,7 +132,7 @@ export default async function EventsPage() {
                   <div className="pl-6 text-xs">{wedding.venue_location}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-admin-border/50">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4 pt-4 border-t border-admin-border/50">
                 <Link
                   href={`/admin/events/${wedding.id}/dashboard`}
                   className="flex-1 text-center py-2 rounded-lg bg-admin-accent/10 text-admin-accent hover:bg-admin-accent hover:text-white transition-all text-sm font-medium"
@@ -100,7 +148,9 @@ export default async function EventsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
                 </Link>
-                <DeleteEventButton weddingId={wedding.id} weddingName={`${wedding.groom_name} & ${wedding.bride_name}`} />
+                {isAdmin && (
+                  <DeleteEventButton weddingId={wedding.id} weddingName={`${wedding.groom_name} & ${wedding.bride_name}`} />
+                )}
               </div>
             </div>
           ))}

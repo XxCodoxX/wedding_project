@@ -127,7 +127,7 @@ export default function GuestForm({
         </div>
 
         {/* Submit */}
-        <div className="flex items-center gap-4 pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
           <button
             type="submit"
             disabled={loading}

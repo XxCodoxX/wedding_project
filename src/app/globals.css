@@ -180,3 +180,43 @@ body {
   transform: scale(1.03);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
+
+/* ─── Mobile Responsiveness ─── */
+
+/* Ensure proper tap targets and smooth scrolling */
+@media (max-width: 768px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Disable hover scale on touch devices (jarring on tap) */
+  .photo-gallery-item:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Make sure inputs don't zoom on iOS (font-size >= 16px) */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="url"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Better touch targets */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Safe area padding for notched devices on footers */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  footer {
+    padding-bottom: calc(3rem + env(safe-area-inset-bottom));
+  }
+}

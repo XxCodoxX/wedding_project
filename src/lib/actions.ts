@@ -1,10 +1,16 @@
 "use server";
 
 import { createServerClient } from "@/lib/supabase";
+import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 // ---------- Create Wedding ----------
 export async function createWedding(formData: FormData) {
+  const profile = await getUserProfile();
+  if (!profile || profile.role !== "admin") {
+    return { error: "Unauthorized: Only admins can create events" };
+  }
+
   const supabase = createServerClient();
 
   const groomName = formData.get("groom_name") as string;
@@ -62,6 +68,11 @@ export async function createWedding(formData: FormData) {
 
 // ---------- Update Wedding ----------
 export async function updateWedding(weddingId: string, formData: FormData) {
+  const hasAccess = await canAccessWedding(weddingId);
+  if (!hasAccess) {
+    return { error: "Unauthorized: You don't have access to this event" };
+  }
+
   const supabase = createServerClient();
 
   const groomName = formData.get("groom_name") as string;
@@ -135,6 +146,11 @@ export async function updateWedding(weddingId: string, formData: FormData) {
 
 // ---------- Delete Wedding ----------
 export async function deleteWedding(weddingId: string) {
+  const profile = await getUserProfile();
+  if (!profile || profile.role !== "admin") {
+    return { error: "Unauthorized: Only admins can delete events" };
+  }
+
   const supabase = createServerClient();
 
   // Delete all photos in the wedding's storage folder
@@ -161,8 +177,6 @@ export async function deleteWedding(weddingId: string) {
 
 // ---------- Create Guest ----------
 export async function createGuest(formData: FormData) {
-  const supabase = createServerClient();
-
   const weddingId = formData.get("wedding_id") as string;
   const guestName = formData.get("guest_name") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
@@ -171,9 +185,16 @@ export async function createGuest(formData: FormData) {
     return { error: "Wedding ID is required" };
   }
 
+  const hasAccess = await canAccessWedding(weddingId);
+  if (!hasAccess) {
+    return { error: "Unauthorized: You don't have access to this event" };
+  }
+
   if (!guestName?.trim()) {
     return { error: "Guest name is required" };
   }
+
+  const supabase = createServerClient();
 
   // Insert guest row
   const { data: guest, error: insertError } = await supabase
@@ -202,6 +223,23 @@ export async function updateGuest(guestId: string, formData: FormData) {
   const guestName = formData.get("guest_name") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
 
+  let targetWeddingId = weddingId;
+  if (!targetWeddingId) {
+    const { data: guest } = await supabase
+      .from("guests")
+      .select("wedding_id")
+      .eq("id", guestId)
+      .single();
+    targetWeddingId = guest?.wedding_id;
+  }
+
+  if (targetWeddingId) {
+    const hasAccess = await canAccessWedding(targetWeddingId);
+    if (!hasAccess) {
+      return { error: "Unauthorized: You don't have access to this event" };
+    }
+  }
+
   if (!guestName?.trim()) {
     return { error: "Guest name is required" };
   }
@@ -219,9 +257,9 @@ export async function updateGuest(guestId: string, formData: FormData) {
     return { error: updateError.message };
   }
 
-  if (weddingId) {
-    revalidatePath(`/admin/events/${weddingId}/dashboard`);
-    revalidatePath(`/admin/events/${weddingId}/guests/${guestId}/edit`);
+  if (targetWeddingId) {
+    revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
+    revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
   }
   return { success: true, guestId };
 }
@@ -230,6 +268,23 @@ export async function updateGuest(guestId: string, formData: FormData) {
 export async function deleteGuest(guestId: string, weddingId?: string) {
   const supabase = createServerClient();
 
+  let targetWeddingId = weddingId;
+  if (!targetWeddingId) {
+    const { data: guest } = await supabase
+      .from("guests")
+      .select("wedding_id")
+      .eq("id", guestId)
+      .single();
+    targetWeddingId = guest?.wedding_id;
+  }
+
+  if (targetWeddingId) {
+    const hasAccess = await canAccessWedding(targetWeddingId);
+    if (!hasAccess) {
+      return { error: "Unauthorized: You don't have access to this event" };
+    }
+  }
+
   // Delete the guest row
   const { error } = await supabase.from("guests").delete().eq("id", guestId);
 
@@ -237,8 +292,8 @@ export async function deleteGuest(guestId: string, weddingId?: string) {
     return { error: error.message };
   }
 
-  if (weddingId) {
-    revalidatePath(`/admin/events/${weddingId}/dashboard`);
+  if (targetWeddingId) {
+    revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
   }
   return { success: true };
 }

@@ -54,7 +54,7 @@ export default function InviteLinkDisplay({ inviteCode }: InviteLinkDisplayProps
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <button
           type="button"
           onClick={handleCopy}

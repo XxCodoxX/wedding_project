@@ -1,29 +1,37 @@
 import { NextResponse } from "next/server";
-import { createSession, setSessionCookie } from "@/lib/auth";
+import { createAuthServerClient } from "@/lib/supabase-auth";
 
 export async function POST(request: Request) {
   try {
-    const { username, password } = await request.json();
+    const { email, password } = await request.json();
 
-    const validUsername = process.env.ADMIN_USERNAME;
-    const validPassword = process.env.ADMIN_PASSWORD;
-
-    if (!validUsername || !validPassword) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 }
+        { error: "Email and password are required" },
+        { status: 400 }
       );
     }
 
-    if (username !== validUsername || password !== validPassword) {
+    const supabase = await createAuthServerClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
+    if (!data.user) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
-
-    const token = await createSession();
-    await setSessionCookie(token);
 
     return NextResponse.json({ success: true });
   } catch {

@@ -135,7 +135,7 @@ export default function WeddingForm({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-admin-text-muted mb-2">
                 Groom Name <span className="text-admin-danger">*</span>
@@ -223,12 +223,12 @@ export default function WeddingForm({
             <label className="block text-sm font-medium text-admin-text-muted mb-2">
               Template <span className="text-admin-danger">*</span>
             </label>
-            <div className="flex gap-4 items-start mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-start mb-6">
               <select
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
-                className="flex-1 px-4 py-3 rounded-xl bg-admin-bg border border-admin-border text-admin-text focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all appearance-none"
+                className="w-full sm:flex-1 px-4 py-3 rounded-xl bg-admin-bg border border-admin-border text-admin-text focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all appearance-none"
               >
                 {TEMPLATE_REGISTRY.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
@@ -277,7 +277,7 @@ export default function WeddingForm({
             </div>
           </div>
 
-          <div className="flex items-center gap-4 pt-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-6">
             <button
               type="submit"
               disabled={loading}
