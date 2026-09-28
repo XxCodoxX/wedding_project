@@ -19,6 +19,7 @@ export interface Wedding {
   gallery_image_urls: string[];
   custom_message?: string | null;
   agenda_items?: AgendaItem[] | null;
+  whatsapp_message_template?: string | null;
   created_at: string;
 }
 

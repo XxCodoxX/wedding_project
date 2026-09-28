@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import InviteLinkDisplay from "./InviteLinkDisplay";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 
+import type { Wedding, Guest } from "@/lib/supabase";
+
 type InvitationType = "individual" | "couple" | "family";
 
 interface MemberEntry {
@@ -17,6 +19,8 @@ interface GuestFormProps {
   mode: "create" | "edit";
   guestId?: string;
   weddingId: string;
+  wedding?: Partial<Wedding> | null;
+  guest?: Partial<Guest> | null;
   initialData?: {
     guest_name: string;
     custom_message: string | null;
@@ -32,6 +36,8 @@ export default function GuestForm({
   mode,
   guestId,
   weddingId,
+  wedding,
+  guest,
   initialData,
   inviteCode,
   onSubmit,
@@ -148,7 +154,11 @@ export default function GuestForm({
       {/* Invite Link (shown on edit) */}
       {savedInviteCode && (
         <div className="animate-fade-in-up">
-          <InviteLinkDisplay inviteCode={savedInviteCode} />
+          <InviteLinkDisplay
+            inviteCode={savedInviteCode}
+            wedding={wedding}
+            guest={guest}
+          />
         </div>
       )}
 

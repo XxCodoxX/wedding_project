@@ -33,7 +33,7 @@ export default async function EditGuestPage({ params }: PageProps) {
 
   const { data: wedding, error: weddingError } = await supabase
     .from("weddings")
-    .select("groom_name, bride_name")
+    .select("id, groom_name, bride_name, wedding_date, venue_name, whatsapp_message_template")
     .eq("id", weddingId)
     .single();
 
@@ -95,6 +95,8 @@ export default async function EditGuestPage({ params }: PageProps) {
         mode="edit"
         guestId={guest.id}
         weddingId={weddingId}
+        wedding={wedding}
+        guest={guest}
         initialData={{
           guest_name: guest.guest_name,
           custom_message: guest.custom_message,

@@ -270,7 +270,11 @@ export default async function DashboardPage({ params }: PageProps) {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <CopyLinkButton code={group.inviteCode} />
+                        <CopyLinkButton
+                          code={group.inviteCode}
+                          wedding={wedding}
+                          guest={group.primaryGuest}
+                        />
                       </td>
                       <td className="px-6 py-4 text-sm text-admin-text-muted">
                         {new Date(group.primaryGuest.created_at).toLocaleDateString()}
@@ -336,7 +340,11 @@ export default async function DashboardPage({ params }: PageProps) {
                 </div>
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-admin-border/50">
                   <div className="flex items-center gap-2">
-                    <CopyLinkButton code={group.inviteCode} />
+                    <CopyLinkButton
+                      code={group.inviteCode}
+                      wedding={wedding}
+                      guest={group.primaryGuest}
+                    />
                     <span className="text-xs text-admin-text-muted">
                       {new Date(group.primaryGuest.created_at).toLocaleDateString()}
                     </span>
@@ -481,6 +489,14 @@ function GroupRsvpSummary({ members }: { members: Guest[] }) {
   );
 }
 
-function CopyLinkButton({ code }: { code: string }) {
-  return <CopyLinkButtonClient code={code} />;
+function CopyLinkButton({
+  code,
+  wedding,
+  guest,
+}: {
+  code: string;
+  wedding?: Partial<Wedding> | null;
+  guest?: Partial<Guest> | null;
+}) {
+  return <CopyLinkButtonClient code={code} wedding={wedding} guest={guest} />;
 }

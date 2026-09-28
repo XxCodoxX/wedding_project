@@ -1,16 +1,34 @@
 "use client";
 
 import { useState } from "react";
+import type { Wedding, Guest } from "@/lib/supabase";
+import { formatWhatsAppMessage, getWhatsAppShareUrl } from "@/lib/whatsapp";
 
 interface InviteLinkDisplayProps {
   inviteCode: string;
+  wedding?: Partial<Wedding> | null;
+  guest?: Partial<Guest> | null;
+  phoneNumber?: string;
 }
 
-export default function InviteLinkDisplay({ inviteCode }: InviteLinkDisplayProps) {
+export default function InviteLinkDisplay({
+  inviteCode,
+  wedding,
+  guest,
+  phoneNumber,
+}: InviteLinkDisplayProps) {
   const [copied, setCopied] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const fullUrl = `${baseUrl}/invite/${inviteCode}`;
+
+  const messageText = formatWhatsAppMessage({
+    template: wedding?.whatsapp_message_template,
+    wedding,
+    guest,
+    inviteUrl: fullUrl,
+  });
 
   const handleCopy = async () => {
     try {
@@ -18,7 +36,6 @@ export default function InviteLinkDisplay({ inviteCode }: InviteLinkDisplayProps
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // Fallback
       const textarea = document.createElement("textarea");
       textarea.value = fullUrl;
       document.body.appendChild(textarea);
@@ -30,18 +47,43 @@ export default function InviteLinkDisplay({ inviteCode }: InviteLinkDisplayProps
     }
   };
 
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(messageText);
+      setMessageCopied(true);
+      setTimeout(() => setMessageCopied(false), 2500);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = messageText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setMessageCopied(true);
+      setTimeout(() => setMessageCopied(false), 2500);
+    }
+  };
+
   const handleWhatsApp = () => {
-    const message = encodeURIComponent(
-      `You're invited to our wedding! 💍✨\n\nView your personalized invitation here:\n${fullUrl}`
-    );
-    window.open(`https://wa.me/?text=${message}`, "_blank");
+    const waUrl = getWhatsAppShareUrl(messageText, phoneNumber);
+    window.open(waUrl, "_blank");
   };
 
   return (
-    <div className="rounded-2xl bg-admin-accent/5 border border-admin-accent/20 p-5">
-      <label className="block text-sm font-medium text-admin-accent-light mb-3">
-        🔗 Invite Link
-      </label>
+    <div className="rounded-2xl bg-admin-accent/5 border border-admin-accent/20 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold text-admin-accent-light flex items-center gap-1.5">
+          <span>🔗</span> Invitation Link & WhatsApp
+        </label>
+        <button
+          type="button"
+          onClick={handleCopyMessage}
+          className="text-xs font-medium text-admin-text-muted hover:text-emerald-400 transition-colors flex items-center gap-1 cursor-pointer"
+          title="Copy formatted WhatsApp invitation message"
+        >
+          {messageCopied ? "✓ Message Copied!" : "📋 Copy WhatsApp Message"}
+        </button>
+      </div>
 
       {/* Link display */}
       <div className="flex items-center gap-2 mb-4">

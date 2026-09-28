@@ -10,11 +10,70 @@ interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-export const metadata: Metadata = {
-  title: "You're Invited! | Wedding Invitation",
-  description:
-    "You are cordially invited to celebrate our wedding. View your personalized invitation and RSVP.",
-};
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { code } = await params;
+  const guestId = decryptGuestId(code);
+  if (!guestId) {
+    return {
+      title: "Wedding Invitation",
+      description: "You are cordially invited to celebrate our wedding.",
+    };
+  }
+
+  try {
+    const supabase = createServerClient();
+    const { data: guest } = await supabase
+      .from("guests")
+      .select("guest_name, group_label, weddings(groom_name, bride_name, wedding_date, venue_name, main_image_url)")
+      .eq("id", guestId)
+      .single();
+
+    if (guest && guest.weddings) {
+      const rawWedding = (guest as any).weddings;
+      const wedding = Array.isArray(rawWedding) ? rawWedding[0] : rawWedding;
+      const couple =
+        wedding?.groom_name && wedding?.bride_name
+          ? `${wedding.groom_name} & ${wedding.bride_name}`
+          : "Wedding Invitation";
+      const guestName = guest.group_label || guest.guest_name;
+      const title = `${couple} — Wedding Invitation`;
+      const description = `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
+
+      return {
+        title,
+        description,
+        openGraph: {
+          title,
+          description: guestName ? `Specially prepared for ${guestName}. ${description}` : description,
+          images: wedding?.main_image_url
+            ? [
+                {
+                  url: wedding.main_image_url,
+                  width: 1200,
+                  height: 630,
+                  alt: title,
+                },
+              ]
+            : [],
+          type: "website",
+        },
+        twitter: {
+          card: "summary_large_image",
+          title,
+          description,
+          images: wedding?.main_image_url ? [wedding.main_image_url] : [],
+        },
+      };
+    }
+  } catch {
+    // fallback
+  }
+
+  return {
+    title: "Wedding Invitation",
+    description: "You are cordially invited to celebrate our wedding.",
+  };
+}
 
 export default async function InvitePage({ params }: PageProps) {
   const { code } = await params;

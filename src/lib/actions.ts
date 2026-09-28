@@ -21,6 +21,7 @@ export async function createWedding(formData: FormData) {
   const locationUrl = (formData.get("location_url") as string) || null;
   const templateId = formData.get("template_id") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
+  const whatsappTemplate = (formData.get("whatsapp_message_template") as string) || null;
   const rawAgenda = (formData.get("agenda_items") as string) || null;
   let agendaItems: any[] | null = null;
   if (rawAgenda) {
@@ -49,6 +50,7 @@ export async function createWedding(formData: FormData) {
   let insertPayload: Record<string, any> = {
     ...basePayload,
     custom_message: customMessage?.trim() || null,
+    whatsapp_message_template: whatsappTemplate?.trim() || null,
   };
   if (agendaItems && Array.isArray(agendaItems)) {
     insertPayload.agenda_items = agendaItems;
@@ -82,6 +84,13 @@ export async function createWedding(formData: FormData) {
       };
     }
     const retry = await supabase.from("weddings").insert(basePayload).select().single();
+    wedding = retry.data;
+    insertError = retry.error;
+  }
+
+  if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703" || insertError.message?.includes("whatsapp_message_template"))) {
+    delete insertPayload.whatsapp_message_template;
+    const retry = await supabase.from("weddings").insert(insertPayload).select().single();
     wedding = retry.data;
     insertError = retry.error;
   }
@@ -133,6 +142,7 @@ export async function updateWedding(weddingId: string, formData: FormData) {
   const locationUrl = (formData.get("location_url") as string) || null;
   const templateId = formData.get("template_id") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
+  const whatsappTemplate = (formData.get("whatsapp_message_template") as string) || null;
   const formMainImageUrl = formData.has("main_image_url") ? (formData.get("main_image_url") as string) : null;
   const rawAgenda = (formData.get("agenda_items") as string) || null;
   let agendaItems: any[] | null = null;
@@ -199,6 +209,7 @@ export async function updateWedding(weddingId: string, formData: FormData) {
   let updatePayload: Record<string, any> = {
     ...baseUpdate,
     custom_message: customMessage?.trim() || null,
+    whatsapp_message_template: whatsappTemplate?.trim() || null,
   };
   if (agendaItems !== null) {
     updatePayload.agenda_items = agendaItems;
@@ -208,6 +219,12 @@ export async function updateWedding(weddingId: string, formData: FormData) {
     .from("weddings")
     .update(updatePayload)
     .eq("id", weddingId);
+
+  if (error && (error.code === "PGRST204" || error.code === "42703" || error.message?.includes("whatsapp_message_template"))) {
+    delete updatePayload.whatsapp_message_template;
+    const retry = await supabase.from("weddings").update(updatePayload).eq("id", weddingId);
+    error = retry.error;
+  }
 
   if (error && (error.code === "PGRST204" || error.code === "42703" || error.message?.includes("agenda_items"))) {
     if (agendaItems && agendaItems.length > 0) {
