@@ -18,6 +18,10 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://wedding-project-blond.vercel.app")
+  ),
   title: "Wedding Invitation",
   description:
     "You are cordially invited to celebrate our special day. View your personalized wedding invitation.",
@@ -28,6 +32,25 @@ export const metadata: Metadata = {
     ],
     shortcut: "/icon.svg",
     apple: "/logo-icon.svg",
+  },
+  openGraph: {
+    title: "Wedding Invitation",
+    description: "You are cordially invited to celebrate our special day. View your personalized wedding invitation.",
+    images: [
+      {
+        url: "/default-og.png",
+        width: 1200,
+        height: 630,
+        alt: "Wedding Invitation",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Wedding Invitation",
+    description: "You are cordially invited to celebrate our special day. View your personalized wedding invitation.",
+    images: ["/default-og.png"],
   },
 };
 

@@ -17,6 +17,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return {
       title: "Wedding Invitation",
       description: "You are cordially invited to celebrate our wedding.",
+      openGraph: {
+        title: "Wedding Invitation",
+        description: "You are cordially invited to celebrate our wedding.",
+        images: ["/default-og.png"],
+      },
     };
   }
 
@@ -24,54 +29,74 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const supabase = createServerClient();
     const { data: guest } = await supabase
       .from("guests")
-      .select("guest_name, group_label, weddings(groom_name, bride_name, wedding_date, venue_name, main_image_url)")
+      .select("guest_name, group_label, wedding_id, weddings(*)")
       .eq("id", guestId)
       .single();
 
-    if (guest && guest.weddings) {
-      const rawWedding = (guest as any).weddings;
-      const wedding = Array.isArray(rawWedding) ? rawWedding[0] : rawWedding;
+    if (guest) {
+      let wedding: Partial<Wedding> | null = null;
+      if (guest.weddings) {
+        const rawWedding = (guest as any).weddings;
+        wedding = Array.isArray(rawWedding) ? rawWedding[0] : rawWedding;
+      } else if (guest.wedding_id) {
+        const { data: directWedding } = await supabase
+          .from("weddings")
+          .select("*")
+          .eq("id", guest.wedding_id)
+          .single();
+        wedding = directWedding;
+      }
+
       const couple =
         wedding?.groom_name && wedding?.bride_name
           ? `${wedding.groom_name} & ${wedding.bride_name}`
-          : "Wedding Invitation";
+          : wedding?.groom_name || wedding?.bride_name || "Wedding Invitation";
+
       const guestName = guest.group_label || guest.guest_name;
       const title = `${couple} — Wedding Invitation`;
-      const description = `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
+      const description = guestName
+        ? `Specially prepared for ${guestName}. We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`
+        : `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
+
+      // Use wedding cover photo if available; otherwise use the luxury gold wedding rings card
+      const imageUrl = wedding?.main_image_url || "/default-og.png";
 
       return {
         title,
         description,
         openGraph: {
           title,
-          description: guestName ? `Specially prepared for ${guestName}. ${description}` : description,
-          images: wedding?.main_image_url
-            ? [
-                {
-                  url: wedding.main_image_url,
-                  width: 1200,
-                  height: 630,
-                  alt: title,
-                },
-              ]
-            : [],
+          description,
+          images: [
+            {
+              url: imageUrl,
+              width: 1200,
+              height: 630,
+              alt: title,
+            },
+          ],
           type: "website",
         },
         twitter: {
           card: "summary_large_image",
           title,
           description,
-          images: wedding?.main_image_url ? [wedding.main_image_url] : [],
+          images: [imageUrl],
         },
       };
     }
-  } catch {
-    // fallback
+  } catch (e) {
+    console.error("Error generating invite metadata:", e);
   }
 
   return {
     title: "Wedding Invitation",
     description: "You are cordially invited to celebrate our wedding.",
+    openGraph: {
+      title: "Wedding Invitation",
+      description: "You are cordially invited to celebrate our wedding.",
+      images: ["/default-og.png"],
+    },
   };
 }
 
