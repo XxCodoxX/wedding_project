@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" fill="none">
+  <defs>
+    <!-- Radiant 24K Gold Gradient -->
+    <linearGradient id="pubLogoGold" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF9D2" />
+      <stop offset="25%" stop-color="#FFD54F" />
+      <stop offset="55%" stop-color="#FFB300" />
+      <stop offset="85%" stop-color="#FFA000" />
+      <stop offset="100%" stop-color="#FFE082" />
+    </linearGradient>
+
+    <!-- Diamond Gradient -->
+    <linearGradient id="pubLogoDiamond" x1="32" y1="8" x2="32" y2="25" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#E3F2FD" />
+      <stop offset="100%" stop-color="#90CAF9" />
+    </linearGradient>
+  </defs>
+
+  <!-- ── Brand Mark Icon (Left 64x64) ── -->
+  <g transform="translate(0, 0)">
+    <!-- Badge Background -->
+    <rect width="64" height="64" rx="16" fill="#131722" />
+    <rect width="62" height="62" x="1" y="1" rx="15" fill="none" stroke="url(#pubLogoGold)" stroke-width="1.5" stroke-opacity="0.6" />
+
+    <!-- Left Ring -->
+    <circle cx="25.5" cy="38.5" r="13.5" stroke="url(#pubLogoGold)" stroke-width="4.5" fill="none" />
+
+    <!-- Right Ring -->
+    <circle cx="38.5" cy="38.5" r="13.5" stroke="url(#pubLogoGold)" stroke-width="4.5" fill="none" />
+
+    <!-- Interlocking arc -->
+    <path d="M 32 25.5 A 13.5 13.5 0 0 1 39 36" stroke="url(#pubLogoGold)" stroke-width="4.5" stroke-linecap="round" fill="none" />
+
+    <!-- Diamond Mount -->
+    <path d="M27 20 L32 23 L37 20" stroke="url(#pubLogoGold)" stroke-width="2" stroke-linecap="round" fill="none" />
+    <circle cx="32" cy="23.5" r="2" fill="url(#pubLogoGold)" />
+
+    <!-- Brilliant Diamond -->
+    <path d="M26.5 14 L37.5 14 L42 19 L32 27 L22 19 Z" fill="url(#pubLogoDiamond)" />
+    <path d="M26.5 14 L32 19 L37.5 14 M32 19 L32 27 M22 19 L42 19 M26.5 14 L32 27 M37.5 14 L32 27" stroke="#FFFFFF" stroke-width="0.8" stroke-opacity="0.95" fill="none" />
+
+    <!-- Diamond Sparkle -->
+    <path d="M32 6 L33.4 10.5 L38 11.5 L33.4 12.5 L32 17 L30.6 12.5 L26 11.5 L30.6 10.5 Z" fill="#FFFFFF" />
+    <circle cx="32" cy="11.5" r="1" fill="#FFF9D2" />
+    
+    <!-- Accent Sparkles -->
+    <path d="M48 20 L48.8 22.5 L51 23 L48.8 23.5 L48 26 L47.2 23.5 L45 23 L47.2 22.5 Z" fill="#FFD54F" />
+  </g>
+
+  <!-- ── Brand Typography (Right) ── -->
+  <g transform="translate(76, 0)">
+    <text x="0" y="32" font-family="'Cormorant Garamond', 'Cinzel', Georgia, serif" font-size="24" font-weight="700" fill="#E2E8F0" letter-spacing="1.5">
+      WEDDING
+    </text>
+
+    <text x="1" y="47" font-family="'Outfit', system-ui, -apple-system, sans-serif" font-size="9" font-weight="600" fill="url(#pubLogoGold)" letter-spacing="3.2">
+      INVITATIONS &amp; RSVP
+    </text>
+
+    <line x1="1" y1="53" x2="148" y2="53" stroke="url(#pubLogoGold)" stroke-width="0.8" stroke-opacity="0.4" />
+  </g>
+</svg>

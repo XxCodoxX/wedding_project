@@ -21,6 +21,14 @@ export const metadata: Metadata = {
   title: "Wedding Invitation",
   description:
     "You are cordially invited to celebrate our special day. View your personalized wedding invitation.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/logo-icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/logo-icon.svg",
+  },
 };
 
 export const viewport: Viewport = {

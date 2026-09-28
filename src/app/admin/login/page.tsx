@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
+import ProjectLogo from "@/components/common/ProjectLogo";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -56,17 +57,10 @@ export default function AdminLoginPage() {
             rounded="2xl"
           />
           {/* Logo / Title */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-admin-accent/10 mb-4">
-              <svg className="w-8 h-8 text-admin-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-semibold text-admin-text">
-              Admin Panel
-            </h1>
-            <p className="text-admin-text-muted text-sm mt-1">
-              Wedding Invitation Manager
+          <div className="flex flex-col items-center text-center mb-8">
+            <ProjectLogo variant="full" size="lg" className="mb-2" />
+            <p className="text-admin-text-muted text-xs tracking-wider uppercase mt-1">
+              Admin Portal
             </p>
           </div>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import type { UserProfile } from "@/lib/auth";
+import ProjectLogo from "@/components/common/ProjectLogo";
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -109,10 +110,9 @@ export default function AdminShell({
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
         </button>
-        <h2 className="text-sm font-semibold text-admin-text flex items-center gap-2">
-          <span className="text-lg">💍</span>
-          Wedding Admin
-        </h2>
+        <Link href="/admin/events" className="hover:opacity-90 transition-opacity">
+          <ProjectLogo variant="full" size="sm" />
+        </Link>
         <div className="w-10" />
       </div>
 
@@ -131,11 +131,10 @@ export default function AdminShell({
           lg:translate-x-0`}
       >
         {/* Logo */}
-        <div className="p-6 border-b border-admin-border flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-admin-text flex items-center gap-2">
-            <span className="text-2xl">💍</span>
-            Wedding Admin
-          </h2>
+        <div className="p-5 border-b border-admin-border flex items-center justify-between">
+          <Link href="/admin/events" className="hover:opacity-90 transition-opacity">
+            <ProjectLogo variant="full" size="md" />
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="p-1.5 rounded-lg text-admin-text-muted hover:text-admin-text hover:bg-admin-border/30 transition-all lg:hidden"
