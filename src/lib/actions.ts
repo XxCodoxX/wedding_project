@@ -20,39 +20,89 @@ export async function createWedding(formData: FormData) {
   const venueLocation = formData.get("venue_location") as string;
   const locationUrl = (formData.get("location_url") as string) || null;
   const templateId = formData.get("template_id") as string;
+  const customMessage = (formData.get("custom_message") as string) || null;
+  const rawAgenda = (formData.get("agenda_items") as string) || null;
+  let agendaItems: any[] | null = null;
+  if (rawAgenda) {
+    try {
+      agendaItems = JSON.parse(rawAgenda);
+    } catch {
+      agendaItems = null;
+    }
+  }
 
   if (!groomName?.trim() || !brideName?.trim() || !weddingDate || !venueName?.trim() || !venueLocation?.trim() || !templateId?.trim()) {
     return { error: "All required fields must be filled" };
   }
 
   // Insert wedding first to get ID
-  const { data: wedding, error: insertError } = await supabase
+  const basePayload = {
+    groom_name: groomName.trim(),
+    bride_name: brideName.trim(),
+    wedding_date: weddingDate,
+    venue_name: venueName.trim(),
+    venue_location: venueLocation.trim(),
+    location_url: locationUrl?.trim() || null,
+    template_id: templateId,
+  };
+
+  let insertPayload: Record<string, any> = {
+    ...basePayload,
+    custom_message: customMessage?.trim() || null,
+  };
+  if (agendaItems && Array.isArray(agendaItems)) {
+    insertPayload.agenda_items = agendaItems;
+  }
+
+  let { data: wedding, error: insertError } = await supabase
     .from("weddings")
-    .insert({
-      groom_name: groomName.trim(),
-      bride_name: brideName.trim(),
-      wedding_date: weddingDate,
-      venue_name: venueName.trim(),
-      venue_location: venueLocation.trim(),
-      location_url: locationUrl?.trim() || null,
-      template_id: templateId,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
+  if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703" || insertError.message?.includes("agenda_items"))) {
+    if (agendaItems && agendaItems.length > 0) {
+      return {
+        error: "Database column 'agenda_items' is missing. Please run supabase/08_add_agenda_items_to_weddings.sql in your Supabase SQL Editor.",
+      };
+    }
+    const retry = await supabase
+      .from("weddings")
+      .insert({ ...basePayload, custom_message: customMessage?.trim() || null })
+      .select()
+      .single();
+    wedding = retry.data;
+    insertError = retry.error;
+  }
+
+  if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703" || insertError.message?.includes("custom_message"))) {
+    if (customMessage?.trim()) {
+      return {
+        error: "Database column 'custom_message' is missing. Please run supabase/07_add_custom_message_to_weddings.sql in your Supabase SQL Editor.",
+      };
+    }
+    const retry = await supabase.from("weddings").insert(basePayload).select().single();
+    wedding = retry.data;
+    insertError = retry.error;
+  }
 
   if (insertError || !wedding) {
     return { error: insertError?.message || "Failed to create wedding" };
   }
 
+  const formMainImageUrl = (formData.get("main_image_url") as string) || null;
+
   // Handle file uploads
   const mainImageUrls = await uploadWeddingPhotos(supabase, wedding.id, formData, "main_image");
   const galleryImageUrls = await uploadWeddingPhotos(supabase, wedding.id, formData, "gallery_images");
 
-  if (mainImageUrls.length > 0 || galleryImageUrls.length > 0) {
+  const effectiveMainImageUrl = mainImageUrls.length > 0 ? mainImageUrls[0] : (formMainImageUrl?.trim() || null);
+
+  if (effectiveMainImageUrl || galleryImageUrls.length > 0) {
     const { error: updateError } = await supabase
       .from("weddings")
       .update({
-        main_image_url: mainImageUrls.length > 0 ? mainImageUrls[0] : null,
+        main_image_url: effectiveMainImageUrl,
         gallery_image_urls: galleryImageUrls,
       })
       .eq("id", wedding.id);
@@ -82,6 +132,17 @@ export async function updateWedding(weddingId: string, formData: FormData) {
   const venueLocation = formData.get("venue_location") as string;
   const locationUrl = (formData.get("location_url") as string) || null;
   const templateId = formData.get("template_id") as string;
+  const customMessage = (formData.get("custom_message") as string) || null;
+  const formMainImageUrl = formData.has("main_image_url") ? (formData.get("main_image_url") as string) : null;
+  const rawAgenda = (formData.get("agenda_items") as string) || null;
+  let agendaItems: any[] | null = null;
+  if (rawAgenda) {
+    try {
+      agendaItems = JSON.parse(rawAgenda);
+    } catch {
+      agendaItems = null;
+    }
+  }
   const removedMainJson = formData.get("removed_main_image") as string;
   const removedGalleryJson = formData.get("removed_gallery_images") as string;
 
@@ -106,6 +167,9 @@ export async function updateWedding(weddingId: string, formData: FormData) {
   if (removedMainJson && JSON.parse(removedMainJson).length > 0) {
     mainImageUrl = null;
   }
+  if (formMainImageUrl !== null) {
+    mainImageUrl = formMainImageUrl.trim() || null;
+  }
   if (removedGalleryJson) {
     const removedUrls = JSON.parse(removedGalleryJson);
     galleryImageUrls = galleryImageUrls.filter((u: string) => !removedUrls.includes(u));
@@ -120,20 +184,53 @@ export async function updateWedding(weddingId: string, formData: FormData) {
   }
   const allGalleryPhotos = [...galleryImageUrls, ...newGalleryUrls];
 
-  const { error } = await supabase
+  const baseUpdate = {
+    groom_name: groomName.trim(),
+    bride_name: brideName.trim(),
+    wedding_date: weddingDate,
+    venue_name: venueName.trim(),
+    venue_location: venueLocation.trim(),
+    location_url: locationUrl?.trim() || null,
+    template_id: templateId,
+    main_image_url: mainImageUrl,
+    gallery_image_urls: allGalleryPhotos,
+  };
+
+  let updatePayload: Record<string, any> = {
+    ...baseUpdate,
+    custom_message: customMessage?.trim() || null,
+  };
+  if (agendaItems !== null) {
+    updatePayload.agenda_items = agendaItems;
+  }
+
+  let { error } = await supabase
     .from("weddings")
-    .update({
-      groom_name: groomName.trim(),
-      bride_name: brideName.trim(),
-      wedding_date: weddingDate,
-      venue_name: venueName.trim(),
-      venue_location: venueLocation.trim(),
-      location_url: locationUrl?.trim() || null,
-      template_id: templateId,
-      main_image_url: mainImageUrl,
-      gallery_image_urls: allGalleryPhotos,
-    })
+    .update(updatePayload)
     .eq("id", weddingId);
+
+  if (error && (error.code === "PGRST204" || error.code === "42703" || error.message?.includes("agenda_items"))) {
+    if (agendaItems && agendaItems.length > 0) {
+      return {
+        error: "Database column 'agenda_items' is missing. Please run supabase/08_add_agenda_items_to_weddings.sql in your Supabase SQL Editor.",
+      };
+    }
+    const retry = await supabase
+      .from("weddings")
+      .update({ ...baseUpdate, custom_message: customMessage?.trim() || null })
+      .eq("id", weddingId);
+    error = retry.error;
+  }
+
+  if (error && (error.code === "PGRST204" || error.code === "42703" || error.message?.includes("custom_message"))) {
+    if (customMessage?.trim()) {
+      return {
+        error: "Database column 'custom_message' is missing. Please run supabase/07_add_custom_message_to_weddings.sql in your Supabase SQL Editor.",
+      };
+    }
+    const retry = await supabase.from("weddings").update(baseUpdate).eq("id", weddingId);
+    error = retry.error;
+  }
 
   if (error) {
     return { error: error.message };

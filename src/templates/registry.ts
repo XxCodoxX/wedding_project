@@ -39,8 +39,8 @@ export const TEMPLATE_REGISTRY: TemplateDefinition[] = [
     id: "ornate",
     name: "Royal Gold",
     description: "A premium white-and-gold design with a rotating mandala ornament intro screen.",
-    requiresMainImage: true,
-    requiresGallery: true,
+    requiresMainImage: false,
+    requiresGallery: false,
     component: OrnateTemplate,
   },
 ];

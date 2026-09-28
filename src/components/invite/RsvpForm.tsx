@@ -56,14 +56,14 @@ export default function RsvpForm({
     <section className="py-20 px-6 bg-cream" id="rsvp">
       <div className="max-w-lg mx-auto text-center">
         {/* Section Title */}
-        <p className="font-outfit text-sm uppercase tracking-[0.25em] text-gold mb-3">
-          We hope you can make it
+        <p className="font-outfit text-xs sm:text-sm uppercase tracking-[0.25em] text-gold mb-2 font-medium">
+          Celebrate With Us
         </p>
-        <h2 className="font-cormorant text-3xl sm:text-4xl font-light text-navy mb-3">
-          Répondez S&apos;il Vous Plaît
+        <h2 className="font-cormorant text-3xl sm:text-4xl font-light text-navy mb-2">
+          Will You Join Our Special Day?
         </h2>
-        <p className="font-outfit text-sm text-navy/50 mb-10">
-          Kindly respond by December 1st, 2026
+        <p className="font-outfit text-sm text-navy/60 mb-8 sm:mb-10">
+          Please confirm your attendance to help us prepare for the celebration
         </p>
 
         {submitted ? (
@@ -81,15 +81,15 @@ export default function RsvpForm({
               )}
             </div>
 
-            <h3 className="font-cormorant text-2xl text-navy mb-2">
+            <h3 className="font-cormorant text-2xl sm:text-3xl text-navy mb-2 font-medium">
               {status === "attending"
-                ? "We can't wait to see you!"
-                : "We'll miss you!"}
+                ? "We're Delighted You Can Make It!"
+                : "You Will Be Dearly Missed!"}
             </h3>
-            <p className="font-outfit text-sm text-navy/60">
+            <p className="font-outfit text-sm text-navy/70 leading-relaxed max-w-sm mx-auto">
               {status === "attending"
-                ? "Thank you for confirming your attendance. We look forward to celebrating with you!"
-                : "Thank you for letting us know. You'll be in our hearts on our special day."}
+                ? `Thank you for confirming, ${guestName || "cherished guest"}. We cannot wait to share this magical day and celebrate our love together!`
+                : `Thank you for letting us know, ${guestName || "cherished guest"}. Your heartfelt love and blessings will be in our hearts on our special day.`}
             </p>
 
             {/* Change response button */}
@@ -98,9 +98,9 @@ export default function RsvpForm({
                 setSubmitted(false);
                 setStatus(null);
               }}
-              className="mt-6 font-outfit text-xs text-gold/70 underline underline-offset-2 hover:text-gold transition-colors cursor-pointer"
+              className="mt-6 font-outfit text-xs text-gold/80 hover:text-gold underline underline-offset-4 transition-colors cursor-pointer"
             >
-              Change response
+              Update my response
             </button>
           </div>
         ) : (
@@ -134,9 +134,12 @@ export default function RsvpForm({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 </div>
-                <p className="font-cormorant text-lg text-navy">
+                <p className="font-cormorant text-lg sm:text-xl text-navy font-medium">
                   Joyfully Accept
                 </p>
+                <span className="block text-xs font-outfit text-navy/50 mt-0.5">
+                  Will attend with pleasure
+                </span>
               </button>
 
               <button
@@ -158,9 +161,12 @@ export default function RsvpForm({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </div>
-                <p className="font-cormorant text-lg text-navy">
+                <p className="font-cormorant text-lg sm:text-xl text-navy font-medium">
                   Regretfully Decline
                 </p>
+                <span className="block text-xs font-outfit text-navy/50 mt-0.5">
+                  Sending love in spirit
+                </span>
               </button>
             </div>
 
@@ -171,8 +177,8 @@ export default function RsvpForm({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={3}
-                  placeholder="Leave a message for the couple (optional)..."
-                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-gold/20 text-navy placeholder-navy/30 font-outfit text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/40 transition-all resize-none"
+                  placeholder="Send your warm wishes, blessings, or notes for the couple (optional)..."
+                  className="w-full px-4 py-3 rounded-xl bg-white/60 border border-gold/20 text-navy placeholder-navy/35 font-outfit text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/40 transition-all resize-none"
                 />
               </div>
             )}
@@ -181,9 +187,9 @@ export default function RsvpForm({
             <button
               onClick={handleSubmit}
               disabled={!status || loading}
-              className={`w-full py-3.5 px-6 rounded-xl font-outfit text-sm font-medium transition-all duration-300 cursor-pointer ${
+              className={`w-full inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-outfit text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all duration-300 ${
                 status
-                  ? "bg-burgundy text-white hover:bg-burgundy-dark shadow-lg shadow-burgundy/20 hover:shadow-burgundy/30"
+                  ? "bg-[#f8df52e1] hover:bg-gold text-[#0D1B3E] cursor-pointer"
                   : "bg-navy/10 text-navy/30 cursor-not-allowed"
               } disabled:opacity-50`}
             >
@@ -193,10 +199,10 @@ export default function RsvpForm({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Sending...
+                  Confirming Attendance...
                 </span>
               ) : (
-                "Send RSVP"
+                "Confirm Attendance"
               )}
             </button>
           </div>

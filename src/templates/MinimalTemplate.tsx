@@ -6,6 +6,11 @@ import Footer from "@/components/invite/Footer";
 import { TemplateProps } from "./registry";
 
 export default function MinimalTemplate({ wedding, guest, isPreview }: TemplateProps) {
+  const guestCustomMsg =
+    guest?.custom_message && guest.custom_message.trim() !== guest?.guest_name?.trim()
+      ? guest.custom_message.trim()
+      : null;
+
   return (
     <main className="min-h-screen bg-white">
       {/* Hero Section */}
@@ -26,13 +31,19 @@ export default function MinimalTemplate({ wedding, guest, isPreview }: TemplateP
           {guest && (
             <GuestGreeting
               guestName={guest.guest_name}
-              customMessage={guest.custom_message}
+              customMessage={guestCustomMsg || wedding.custom_message}
             />
           )}
           {isPreview && !guest && (
             <GuestGreeting
               guestName="John Doe"
-              customMessage="We are so excited to celebrate with you!"
+              customMessage={wedding.custom_message || "We are so excited to celebrate with you!"}
+            />
+          )}
+          {!guest && !isPreview && wedding.custom_message && (
+            <GuestGreeting
+              guestName="Guest"
+              customMessage={wedding.custom_message}
             />
           )}
         </div>

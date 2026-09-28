@@ -1,6 +1,11 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// ---------- Types ----------
+export interface AgendaItem {
+  time: string;
+  title: string;
+  description: string;
+}
+
 export interface Wedding {
   id: string;
   groom_name: string;
@@ -12,6 +17,8 @@ export interface Wedding {
   template_id: string; // Now a text ID referencing a local template (e.g. 'classic')
   main_image_url: string | null;
   gallery_image_urls: string[];
+  custom_message?: string | null;
+  agenda_items?: AgendaItem[] | null;
   created_at: string;
 }
 

@@ -38,8 +38,14 @@ export default async function InvitePage({ params }: PageProps) {
     return <NotFoundPage />;
   }
 
-  const typedGuest = guest as Guest & { weddings: Wedding };
-  const wedding = typedGuest.weddings;
+  const rawWeddings = (guest as any).weddings;
+  const wedding: Wedding = Array.isArray(rawWeddings) ? rawWeddings[0] : rawWeddings;
+
+  if (!wedding) {
+    return <NotFoundPage />;
+  }
+
+  const typedGuest = guest as Guest;
 
   const templateDefinition = getTemplateById(wedding.template_id);
   if (!templateDefinition) {

@@ -11,6 +11,8 @@ interface TemplatePreviewModalProps {
     venueName: string;
     venueLocation: string;
     locationUrl: string | null;
+    custom_message?: string | null;
+    agenda_items?: any[] | null;
     main_image_url: string | null;
     gallery_image_urls: string[];
   };
@@ -37,6 +39,8 @@ export default function TemplatePreviewModal({
     venue_name: weddingDetails.venueName || "Venue Name",
     venue_location: weddingDetails.venueLocation || "Venue Location",
     location_url: weddingDetails.locationUrl || null,
+    custom_message: weddingDetails.custom_message || null,
+    agenda_items: weddingDetails.agenda_items || null,
     template_id: template.id,
     created_at: new Date().toISOString(),
   };
