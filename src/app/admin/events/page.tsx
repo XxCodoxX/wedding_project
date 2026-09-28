@@ -23,12 +23,12 @@ export default async function EventsPage() {
         <p className="text-admin-text-muted text-sm mb-6">
           Your account is authenticated, but no profile or role has been configured yet.
         </p>
-        <Link
+        <a
           href="/admin/logout"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all"
         >
           Sign Out
-        </Link>
+        </a>
       </div>
     );
   }

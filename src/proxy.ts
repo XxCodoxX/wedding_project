@@ -15,6 +15,11 @@ export async function proxy(request: NextRequest) {
     c.name.includes("-auth-token") || c.name.startsWith("sb-")
   );
 
+  // Allow logout route through
+  if (pathname === "/admin/logout") {
+    return NextResponse.next();
+  }
+
   // Allow the login page through
   if (pathname === "/admin/login") {
     // If no auth cookie, immediately let them see the login form without calling Supabase API

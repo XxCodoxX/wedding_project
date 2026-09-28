@@ -1,10 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAuthServerClient } from "@/lib/supabase-auth";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // If this is a prefetch request from Next.js, DO NOT sign out!
+  const url = request.nextUrl;
+  const isPrefetch =
+    url.searchParams.has("_rsc") ||
+    request.headers.get("purpose") === "prefetch" ||
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("x-middleware-prefetch") === "1";
+
+  if (isPrefetch) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   const supabase = await createAuthServerClient();
   await supabase.auth.signOut();
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  return NextResponse.redirect(new URL("/admin/login", baseUrl));
+  return NextResponse.redirect(new URL("/admin/login", request.url));
 }
+
