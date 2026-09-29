@@ -59,7 +59,6 @@ export type ImportInvitation = z.infer<typeof importInvitationSchema>;
 
 export const importPayloadSchema = z.object({
   weddingId: z.uuid("Invalid event ID"),
-  skipDuplicates: z.boolean(),
   invitations: z
     .array(importInvitationSchema)
     .min(1, "No invitations to import")
@@ -173,6 +172,47 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
 
 /** Case/space-insensitive key used for duplicate detection. */
 export const duplicateKey = (name: string) => name.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** An invitation already saved for the event (its primary guest). */
+export interface ExistingInvitation {
+  name: string;
+  /** E.164, as stored by the app. */
+  phone: string | null;
+}
+
+/**
+ * Flags rows that duplicate an existing invitation or an EARLIER row in the same file,
+ * by name (case/space-insensitive) or by phone number (both sides are E.164, so
+ * "0771234567" and "+94 77 123 4567" match).
+ *
+ * Returns row number → human-readable reason(s). Shared by the browser preview and the
+ * Server Action so both always agree on what is a duplicate.
+ */
+export function findDuplicates(
+  invitations: Pick<ImportInvitation, "row" | "name" | "phone">[],
+  existing: ExistingInvitation[]
+): Map<number, string> {
+  const byName = new Map<string, string>();
+  const byPhone = new Map<string, string>();
+
+  for (const e of existing) {
+    const key = duplicateKey(e.name);
+    if (!byName.has(key)) byName.set(key, "Already on the guest list");
+    if (e.phone && !byPhone.has(e.phone)) byPhone.set(e.phone, `Same phone as "${e.name}" (already invited)`);
+  }
+
+  const result = new Map<number, string>();
+  for (const inv of invitations) {
+    const key = duplicateKey(inv.name);
+    const reasons = [byName.get(key), inv.phone ? byPhone.get(inv.phone) : undefined].filter(Boolean);
+    if (reasons.length > 0) result.set(inv.row, reasons.join(" · "));
+
+    // First occurrence wins; later rows are reported against it.
+    if (!byName.has(key)) byName.set(key, `Same name as row ${inv.row}`);
+    if (inv.phone && !byPhone.has(inv.phone)) byPhone.set(inv.phone, `Same phone as row ${inv.row} ("${inv.name}")`);
+  }
+  return result;
+}
 
 // ---------- Whole-sheet processing ----------
 

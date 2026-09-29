@@ -161,7 +161,7 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
           <ImportGuestsButton
             weddingId={weddingId}
             wedding={wedding}
-            existingNames={guestGroups.map((g) => g.label)}
+            existing={guestGroups.map((g) => ({ name: g.label, phone: g.primaryGuest.phone ?? null }))}
           />
           <Link
             href={`/admin/events/${weddingId}/guests/new`}

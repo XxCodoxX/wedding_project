@@ -8,7 +8,8 @@ import { normalizePhone, isMissingPhoneColumn, PHONE_MIGRATION_ERROR } from "@/l
 import { isMissingTrackingColumn, TRACKING_MIGRATION_ERROR } from "@/lib/invite-tracking";
 import {
   importPayloadSchema,
-  duplicateKey,
+  findDuplicates,
+  type ExistingInvitation,
   type ImportInvitation,
   type ImportPayload,
   type InvitationType,
@@ -435,7 +436,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
     return { error: row ? `Row ${row}: ${issue.message}` : issue.message };
   }
 
-  const { weddingId, invitations, skipDuplicates } = parsed.data;
+  const { weddingId, invitations } = parsed.data;
 
   if (!(await canAccessWedding(weddingId))) {
     return { error: "Unauthorized: You don't have access to this event" };
@@ -444,26 +445,21 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
   try {
     const supabase = createServerClient();
 
-    // One invitation = one primary guest row; its label is what "Dear …" shows.
-    const { data: existing, error: fetchError } = await supabase
-      .from("guests")
-      .select("guest_name, group_label")
-      .eq("wedding_id", weddingId)
-      .eq("is_primary", true);
+    // Re-check duplicates against the CURRENT guest list (it may have changed since the preview).
+    const existing = await fetchExistingInvitations(supabase, weddingId);
+    if ("error" in existing) return { error: `Failed to check existing guests: ${existing.error}` };
 
-    if (fetchError) return { error: `Failed to check existing guests: ${fetchError.message}` };
-
-    const seen = new Set((existing ?? []).map((g) => duplicateKey(g.group_label || g.guest_name)));
+    const duplicates = findDuplicates(invitations, existing.invitations);
     const toCreate: ImportInvitation[] = [];
     const skipped: NonNullable<ImportGuestsResult["skipped"]> = [];
 
     for (const inv of invitations) {
-      const key = duplicateKey(inv.name);
-      if (skipDuplicates && seen.has(key)) {
-        skipped.push({ row: inv.row, name: inv.name, reason: "Already invited" });
+      const reason = duplicates.get(inv.row);
+      // Duplicates (same name or phone as an existing invitation / earlier row) are never added.
+      if (reason) {
+        skipped.push({ row: inv.row, name: inv.name, reason });
         continue;
       }
-      seen.add(key); // also catches duplicates inside the same file
       toCreate.push(inv);
     }
 
@@ -788,6 +784,26 @@ export async function deleteGuest(guestId: string, weddingId?: string) {
   return { success: true };
 }
 
+
+// ---------- Helper: Existing Invitations (for duplicate checks) ----------
+/** One entry per invitation (primary guest): its "Dear …" label and phone. */
+async function fetchExistingInvitations(
+  supabase: ReturnType<typeof createServerClient>,
+  weddingId: string
+): Promise<{ invitations: ExistingInvitation[] } | { error: string }> {
+  const query = (columns: string) =>
+    supabase.from("guests").select(columns).eq("wedding_id", weddingId).eq("is_primary", true);
+
+  let { data, error } = await query("guest_name, group_label, phone");
+  // Before migration 11 there is no phone column — fall back to name-only checks.
+  if (isMissingPhoneColumn(error)) ({ data, error } = await query("guest_name, group_label"));
+  if (error) return { error: error.message };
+
+  const rows = (data ?? []) as unknown as Pick<Guest, "guest_name" | "group_label" | "phone">[];
+  return {
+    invitations: rows.map((g) => ({ name: g.group_label || g.guest_name, phone: g.phone ?? null })),
+  };
+}
 
 // ---------- Helper: Save Guest Phone ----------
 /** Sets/clears the phone on a primary guest. Returns an error message, or null on success. */

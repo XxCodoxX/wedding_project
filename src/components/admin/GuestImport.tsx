@@ -7,8 +7,9 @@ import type { Wedding } from "@/lib/supabase";
 import { importGuests, type ImportGuestsResult } from "@/lib/actions";
 import {
   analyzeSheet,
-  duplicateKey,
+  findDuplicates,
   IMPORT_LIMITS,
+  type ExistingInvitation,
   type ImportInvitation,
   type SheetAnalysis,
 } from "@/lib/guest-import";
@@ -20,8 +21,8 @@ import CopyLinkButtonClient from "@/app/admin/events/[id]/dashboard/CopyLinkButt
 interface GuestImportProps {
   weddingId: string;
   wedding: Partial<Wedding>;
-  /** Labels of invitations that already exist for this event (for duplicate warnings). */
-  existingNames: string[];
+  /** Invitations already in this event (name + phone), for duplicate warnings. */
+  existing: ExistingInvitation[];
   /** Called once invitations were created (e.g. to refresh the guest list behind a modal). */
   onImported?: () => void;
   /** Reports reading/importing so a parent modal can block closing mid-import. */
@@ -41,33 +42,23 @@ const TYPE_ICON: Record<ImportInvitation["type"], string> = {
   family: "👨‍👩‍👧‍👦",
 };
 
-export default function GuestImport({ weddingId, wedding, existingNames, onImported, onBusyChange, onClose }: GuestImportProps) {
+export default function GuestImport({ weddingId, wedding, existing, onImported, onBusyChange, onClose }: GuestImportProps) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [reading, setReading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState("");
-  const [skipDuplicates, setSkipDuplicates] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     onBusyChange?.(reading || importing);
   }, [reading, importing, onBusyChange]);
 
-  const existingKeys = useMemo(() => new Set(existingNames.map(duplicateKey)), [existingNames]);
-
-  // Row numbers that duplicate an existing guest or an earlier row in the same file.
-  const duplicateRows = useMemo(() => {
-    const dupes = new Set<number>();
-    if (stage.kind !== "preview") return dupes;
-    const seen = new Set(existingKeys);
-    for (const inv of stage.analysis.valid) {
-      const key = duplicateKey(inv.name);
-      if (seen.has(key)) dupes.add(inv.row);
-      seen.add(key);
-    }
-    return dupes;
-  }, [stage, existingKeys]);
+  // Row number → reason, for rows duplicating an existing invitation or an earlier row (by name or phone).
+  const duplicateRows = useMemo(
+    () => (stage.kind === "preview" ? findDuplicates(stage.analysis.valid, existing) : new Map<number, string>()),
+    [stage, existing]
+  );
 
   const handleFile = useCallback(async (file: File | undefined) => {
     if (!file) return;
@@ -107,7 +98,6 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
     try {
       const result = await importGuests({
         weddingId,
-        skipDuplicates,
         invitations: stage.analysis.valid,
       });
       if (result.error) {
@@ -196,8 +186,6 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
           fileName={stage.fileName}
           analysis={stage.analysis}
           duplicateRows={duplicateRows}
-          skipDuplicates={skipDuplicates}
-          onSkipDuplicatesChange={setSkipDuplicates}
           importing={importing}
           onImport={handleImport}
           onCancel={reset}
@@ -211,9 +199,18 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
               ✅ {stage.result.created.length} invitation{stage.result.created.length === 1 ? "" : "s"} created
             </h2>
             {stage.result.skipped.length > 0 && (
-              <p className="text-sm text-admin-text-muted">
-                {stage.result.skipped.length} skipped as duplicates: {stage.result.skipped.map((s) => s.name).join(", ")}
-              </p>
+              <details className="text-sm text-admin-text-muted">
+                <summary className="cursor-pointer hover:text-admin-text select-none">
+                  {stage.result.skipped.length} skipped as duplicate{stage.result.skipped.length === 1 ? "" : "s"}
+                </summary>
+                <ul className="mt-2 space-y-1 text-xs max-h-40 overflow-y-auto">
+                  {stage.result.skipped.map((s) => (
+                    <li key={s.row}>
+                      <strong className="text-admin-text">Row {s.row} · {s.name}</strong> — {s.reason}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
             <div className="flex flex-col sm:flex-row gap-3 mt-5">
               {stage.result.created.length > 0 && (
@@ -306,20 +303,19 @@ function FormatGuide() {
 interface PreviewProps {
   fileName: string;
   analysis: SheetAnalysis;
-  duplicateRows: Set<number>;
-  skipDuplicates: boolean;
-  onSkipDuplicatesChange: (v: boolean) => void;
+  duplicateRows: Map<number, string>;
   importing: boolean;
   onImport: () => void;
   onCancel: () => void;
 }
 
-function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDuplicatesChange, importing, onImport, onCancel }: PreviewProps) {
+function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCancel }: PreviewProps) {
   const { valid, invalid, ignoredColumns } = analysis;
-  const importCount = skipDuplicates ? valid.filter((v) => !duplicateRows.has(v.row)).length : valid.length;
-  const peopleCount = valid
-    .filter((v) => !skipDuplicates || !duplicateRows.has(v.row))
-    .reduce((n, v) => n + Math.max(1, v.members.length), 0);
+  // Duplicates are never added — the table shows exactly what will be created.
+  const toAdd = valid.filter((v) => !duplicateRows.has(v.row));
+  const duplicates = valid.filter((v) => duplicateRows.has(v.row));
+  const importCount = toAdd.length;
+  const peopleCount = toAdd.reduce((n, v) => n + Math.max(1, v.members.length), 0);
 
   return (
     <div className="space-y-6 animate-fade-in-up relative">
@@ -333,7 +329,7 @@ function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDupl
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="File" value={fileName} small />
-        <Stat label="Ready" value={String(valid.length)} tone="success" />
+        <Stat label="Will be added" value={String(importCount)} tone="success" />
         <Stat label="Errors" value={String(invalid.length)} tone={invalid.length ? "danger" : undefined} />
         <Stat label="Duplicates" value={String(duplicateRows.size)} tone={duplicateRows.size ? "warning" : undefined} />
       </div>
@@ -355,7 +351,20 @@ function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDupl
         </div>
       )}
 
-      {valid.length > 0 && (
+      {duplicates.length > 0 && (
+        <div className="p-4 rounded-xl bg-admin-warning/10 border border-admin-warning/20">
+          <p className="text-sm font-medium text-admin-warning mb-2">
+            {duplicates.length} duplicate row{duplicates.length === 1 ? "" : "s"} will not be added (same name or phone number as an existing invitation or an earlier row).
+          </p>
+          <ul className="text-xs text-admin-warning/90 space-y-1 max-h-40 overflow-y-auto">
+            {duplicates.map((d) => (
+              <li key={d.row}><strong>Row {d.row} · {d.name}:</strong> {duplicateRows.get(d.row)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {toAdd.length > 0 && (
         <div className="glass-dark rounded-2xl overflow-hidden">
           <div className="overflow-x-auto max-h-112 overflow-y-auto">
             <table className="w-full text-sm">
@@ -370,38 +379,24 @@ function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDupl
                 </tr>
               </thead>
               <tbody className="divide-y divide-admin-border/40">
-                {valid.map((inv) => {
-                  const dup = duplicateRows.has(inv.row);
-                  return (
-                    <tr key={inv.row} className={dup ? (skipDuplicates ? "opacity-50" : "bg-admin-warning/5") : undefined}>
-                      <td className="px-4 py-2.5 text-admin-text-muted">{inv.row}</td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-admin-text"><span aria-hidden>{TYPE_ICON[inv.type]}</span> {inv.type}</td>
-                      <td className="px-4 py-2.5 text-admin-text">
-                        {inv.name}
-                        {dup && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-admin-warning/15 text-admin-warning">duplicate</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-admin-text-muted">{inv.members.join(", ") || "—"}</td>
-                      <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap">{inv.phone || "—"}</td>
-                      <td className="px-4 py-2.5 text-admin-text-muted max-w-60 truncate">{inv.message || "—"}</td>
-                    </tr>
-                  );
-                })}
+                {toAdd.map((inv) => (
+                  <tr key={inv.row}>
+                    <td className="px-4 py-2.5 text-admin-text-muted">{inv.row}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-admin-text"><span aria-hidden>{TYPE_ICON[inv.type]}</span> {inv.type}</td>
+                    <td className="px-4 py-2.5 text-admin-text">{inv.name}</td>
+                    <td className="px-4 py-2.5 text-admin-text-muted">{inv.members.join(", ") || "—"}</td>
+                    <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap">{inv.phone || "—"}</td>
+                    <td className="px-4 py-2.5 text-admin-text-muted max-w-60 truncate">{inv.message || "—"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {duplicateRows.size > 0 && (
-        <label className="flex items-center gap-2 text-sm text-admin-text cursor-pointer">
-          <input
-            type="checkbox"
-            checked={skipDuplicates}
-            onChange={(e) => onSkipDuplicatesChange(e.target.checked)}
-            className="w-4 h-4 accent-admin-accent"
-          />
-          Skip duplicates (names already on the guest list or repeated in this file)
-        </label>
+      {importCount === 0 && (
+        <p className="text-sm text-admin-text-muted">Nothing new to add — every row is a duplicate or has an error.</p>
       )}
 
       <div className="flex flex-col sm:flex-row gap-3">
