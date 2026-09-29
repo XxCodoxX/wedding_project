@@ -1,8 +1,16 @@
 "use server";
 
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient, type Guest } from "@/lib/supabase";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { encryptGuestId } from "@/lib/crypto";
+import {
+  importPayloadSchema,
+  duplicateKey,
+  type ImportInvitation,
+  type ImportPayload,
+  type InvitationType,
+} from "@/lib/guest-import";
 
 // ---------- Create Wedding ----------
 export async function createWedding(formData: FormData) {
@@ -387,6 +395,114 @@ export async function createGuest(formData: FormData) {
 
   revalidatePath(`/admin/events/${weddingId}/dashboard`);
   return { success: true, guestId: primaryGuest.id };
+}
+
+// ---------- Bulk Import Guests (CSV / Excel) ----------
+type GuestInsert = Omit<Guest, "rsvp_status" | "created_at">;
+
+export interface ImportGuestsResult {
+  success?: boolean;
+  error?: string;
+  created?: { name: string; type: InvitationType; members: string[]; code: string }[];
+  skipped?: { row: number; name: string; reason: string }[];
+}
+
+export async function importGuests(payload: unknown): Promise<ImportGuestsResult> {
+  // Never trust the client-side preview — re-validate everything here.
+  const parsed = importPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const idx = issue.path[0] === "invitations" ? issue.path[1] : undefined;
+    const row = typeof idx === "number"
+      ? (payload as Partial<ImportPayload> | null)?.invitations?.[idx]?.row
+      : undefined;
+    return { error: row ? `Row ${row}: ${issue.message}` : issue.message };
+  }
+
+  const { weddingId, invitations, skipDuplicates } = parsed.data;
+
+  if (!(await canAccessWedding(weddingId))) {
+    return { error: "Unauthorized: You don't have access to this event" };
+  }
+
+  try {
+    const supabase = createServerClient();
+
+    // One invitation = one primary guest row; its label is what "Dear …" shows.
+    const { data: existing, error: fetchError } = await supabase
+      .from("guests")
+      .select("guest_name, group_label")
+      .eq("wedding_id", weddingId)
+      .eq("is_primary", true);
+
+    if (fetchError) return { error: `Failed to check existing guests: ${fetchError.message}` };
+
+    const seen = new Set((existing ?? []).map((g) => duplicateKey(g.group_label || g.guest_name)));
+    const toCreate: ImportInvitation[] = [];
+    const skipped: NonNullable<ImportGuestsResult["skipped"]> = [];
+
+    for (const inv of invitations) {
+      const key = duplicateKey(inv.name);
+      if (skipDuplicates && seen.has(key)) {
+        skipped.push({ row: inv.row, name: inv.name, reason: "Already invited" });
+        continue;
+      }
+      seen.add(key); // also catches duplicates inside the same file
+      toCreate.push(inv);
+    }
+
+    if (toCreate.length === 0) {
+      return { success: true, created: [], skipped };
+    }
+
+    // Build every row up-front with explicit IDs so we can return invite codes
+    // without a second query, then insert in ONE statement (atomic: all or nothing).
+    const rows = toCreate.flatMap((inv): GuestInsert[] => {
+      if (inv.type === "individual") {
+        return [{
+          id: crypto.randomUUID(),
+          wedding_id: weddingId,
+          guest_name: inv.name,
+          custom_message: inv.message,
+          invitation_type: "individual",
+          group_id: null,
+          group_label: null,
+          is_primary: true,
+        }];
+      }
+      const groupId = crypto.randomUUID();
+      return inv.members.map((member, idx) => ({
+        id: crypto.randomUUID(),
+        wedding_id: weddingId,
+        guest_name: member,
+        custom_message: idx === 0 ? inv.message : null,
+        invitation_type: inv.type,
+        group_id: groupId,
+        group_label: inv.name,
+        is_primary: idx === 0,
+      }));
+    });
+
+    const { error: insertError } = await supabase.from("guests").insert(rows);
+    if (insertError) {
+      return { error: `Import failed, no guests were added: ${insertError.message}` };
+    }
+
+    // Primary rows appear in the same order as toCreate.
+    const primaries = rows.filter((r) => r.is_primary);
+    const created = toCreate.map((inv, i) => ({
+      name: inv.name,
+      type: inv.type,
+      members: inv.members,
+      code: encryptGuestId(primaries[i].id),
+    }));
+
+    revalidatePath(`/admin/events/${weddingId}/dashboard`);
+    return { success: true, created, skipped };
+  } catch (e) {
+    console.error("importGuests failed:", e);
+    return { error: "An unexpected error occurred while importing guests" };
+  }
 }
 
 // ---------- Update Guest ----------
