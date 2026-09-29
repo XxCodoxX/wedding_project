@@ -270,7 +270,7 @@ function InvitationScreen({ wedding, guest, groupMembers, isPreview, backgroundI
             </div>
           )}
 
-          <p className="font-cormorant italic text-[#0D1B3E]/70 mt-3">At their wedding celebration</p>
+          <p className="font-cormorant italic text-[#0D1B3E]/70 mt-3">At our wedding celebration</p>
 
           {/* Couple Anime Illustration */}
           <div className="mt-6 flex justify-center">
@@ -702,21 +702,21 @@ function IntroScreen({
           <span className="block w-8 sm:w-16 h-px bg-[#D4AF37]/50" />
         </div>
 
-        {/* Couple Names */}
+        {/* Couple Names — same script font & sizing as the invitation card's names */}
         <h1
-          className="font-cormorant text-3xl sm:text-5xl md:text-7xl font-light text-[#1A2F6C] leading-tight mb-1 opacity-0 animate-fade-in-up"
+          className={`${script.className} text-6xl sm:text-7xl leading-[1.05] text-[#1A2F6C] drop-shadow-xs wrap-break-word opacity-0 animate-fade-in-up`}
           style={{ animationDelay: "0.7s", animationFillMode: "forwards" }}
         >
           {groomName}
         </h1>
         <p
-          className="font-cormorant text-xl sm:text-2xl md:text-3xl text-[#D4AF37] italic mb-1 opacity-0 animate-fade-in-up"
+          className={`${script.className} text-4xl text-[#D4AF37] my-0.5 opacity-0 animate-fade-in-up`}
           style={{ animationDelay: "0.8s", animationFillMode: "forwards" }}
         >
           &amp;
         </p>
         <h1
-          className="font-cormorant text-3xl sm:text-5xl md:text-7xl font-light text-[#1A2F6C] leading-tight mb-3 sm:mb-6 opacity-0 animate-fade-in-up"
+          className={`${script.className} text-6xl sm:text-7xl leading-[1.05] text-[#1A2F6C] drop-shadow-xs wrap-break-word mb-3 sm:mb-6 opacity-0 animate-fade-in-up`}
           style={{ animationDelay: "0.9s", animationFillMode: "forwards" }}
         >
           {brideName}
