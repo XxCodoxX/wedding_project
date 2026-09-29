@@ -18,17 +18,42 @@ const outfit = Outfit({
   display: "swap",
 });
 
+// Absolute base for OG/icon URLs. Crawlers (WhatsApp, Facebook) need absolute URLs.
+// Use the stable production domain, NOT VERCEL_URL: per-deployment URLs sit behind
+// Vercel Deployment Protection, so link-preview bots get a 401 and show no image.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "https://wedding-project-blond.vercel.app");
+
+const defaultDescription =
+  "You are cordially invited to celebrate our special day. View your personalized wedding invitation.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Wedding Invitation",
-  description:
-    "You are cordially invited to celebrate our special day. View your personalized wedding invitation.",
+  description: defaultDescription,
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/logo-icon.svg", type: "image/svg+xml" },
     ],
     shortcut: "/icon.svg",
-    apple: "/logo-icon.svg",
+    // PNG (not SVG) — WhatsApp/iOS can't render SVG touch icons
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+  },
+  openGraph: {
+    title: "Wedding Invitation",
+    description: defaultDescription,
+    images: [{ url: "/default-og.png", width: 1200, height: 630, alt: "Wedding Invitation" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Wedding Invitation",
+    description: defaultDescription,
+    images: ["/default-og.png"],
   },
 };
 

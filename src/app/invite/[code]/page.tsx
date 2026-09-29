@@ -38,6 +38,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       const guestName = guest.group_label || guest.guest_name;
       const title = `${couple} — Wedding Invitation`;
       const description = `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
+      // Couple's cover photo if set, otherwise the branded card. Never leave this empty:
+      // page-level openGraph replaces the layout's, and WhatsApp then falls back to the favicon.
+      const imageUrl: string = wedding?.main_image_url || "/default-og.png";
 
       return {
         title,
@@ -45,23 +48,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         openGraph: {
           title,
           description: guestName ? `Specially prepared for ${guestName}. ${description}` : description,
-          images: wedding?.main_image_url
-            ? [
-                {
-                  url: wedding.main_image_url,
-                  width: 1200,
-                  height: 630,
-                  alt: title,
-                },
-              ]
-            : [],
+          images: [{ url: imageUrl, width: 1200, height: 630, alt: title }],
           type: "website",
         },
         twitter: {
           card: "summary_large_image",
           title,
           description,
-          images: wedding?.main_image_url ? [wedding.main_image_url] : [],
+          images: [imageUrl],
         },
       };
     }
