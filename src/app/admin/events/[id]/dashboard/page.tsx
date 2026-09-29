@@ -9,6 +9,8 @@ import ImportGuestsButton from "./ImportGuestsButton";
 import SendQueueButton, { type QueueItem } from "./SendQueueButton";
 import InviteStatusCell from "./InviteStatusCell";
 import LiveGuestUpdates from "./LiveGuestUpdates";
+import GuestSearch from "./GuestSearch";
+import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ filter?: string | string[] }>;
+  searchParams: Promise<{ filter?: string | string[]; q?: string | string[] }>;
 }
 
 // Group guests by group_id for display
@@ -112,16 +114,36 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
   const notAttending = guestList.filter((g) => g.rsvp_status === "not_attending").length;
   const pending = guestList.filter((g) => g.rsvp_status === "pending").length;
 
-  // Delivery tracking (per invitation, stored on the primary guest)
-  const filter = parseInviteFilter((await searchParams).filter);
+  // Search (?q=) narrows the table; delivery filter (?filter=) is applied on top of it.
+  const { filter: rawFilter, q: rawQuery } = await searchParams;
+  const filter = parseInviteFilter(rawFilter);
+  const query = parseSearchQuery(rawQuery);
+  const searchedGroups = query
+    ? guestGroups.filter((g) =>
+        matchesSearch(
+          { label: g.label, memberNames: g.members.map((m) => m.guest_name), phone: g.primaryGuest.phone },
+          query
+        )
+      )
+    : guestGroups;
+
+  // Delivery tracking (per invitation, stored on the primary guest). Counts follow the search.
   const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
   const deliveryCounts: Record<InviteFilter, number> = {
-    all: guestGroups.length,
-    not_sent: guestGroups.filter((g) => statusOf(g) === "not_sent").length,
-    sent: guestGroups.filter((g) => statusOf(g) === "sent").length,
-    opened: guestGroups.filter((g) => statusOf(g) === "opened").length,
+    all: searchedGroups.length,
+    not_sent: searchedGroups.filter((g) => statusOf(g) === "not_sent").length,
+    sent: searchedGroups.filter((g) => statusOf(g) === "sent").length,
+    opened: searchedGroups.filter((g) => statusOf(g) === "opened").length,
   };
-  const visibleGroups = filter === "all" ? guestGroups : guestGroups.filter((g) => statusOf(g) === filter);
+  const visibleGroups = filter === "all" ? searchedGroups : searchedGroups.filter((g) => statusOf(g) === filter);
+
+  const dashboardHref = (nextFilter: InviteFilter) => {
+    const params = new URLSearchParams();
+    if (nextFilter !== "all") params.set("filter", nextFilter);
+    if (query) params.set("q", query);
+    const qs = params.toString();
+    return `/admin/events/${weddingId}/dashboard${qs ? `?${qs}` : ""}`;
+  };
 
   // Oldest first, so invitations go out in the order they were added.
   const sendQueue: QueueItem[] = guestGroups
@@ -214,15 +236,16 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
         />
       </div>
 
-      {/* Delivery filter */}
+      {/* Search + delivery filter */}
       {guestGroups.length > 0 && (
-        <nav aria-label="Filter by invitation delivery" className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
+        <nav aria-label="Filter by invitation delivery" className="flex flex-wrap gap-2 order-2 lg:order-1">
           {DELIVERY_TABS.map((tab) => {
             const active = filter === tab.value;
             return (
               <Link
                 key={tab.value}
-                href={tab.value === "all" ? `/admin/events/${weddingId}/dashboard` : `/admin/events/${weddingId}/dashboard?filter=${tab.value}`}
+                href={dashboardHref(tab.value)}
                 aria-current={active ? "page" : undefined}
                 scroll={false}
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm border transition-all ${
@@ -240,6 +263,16 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
             );
           })}
         </nav>
+        <div className="order-1 lg:order-2">
+          <GuestSearch />
+        </div>
+        </div>
+      )}
+
+      {query && guestGroups.length > 0 && (
+        <p className="text-sm text-admin-text-muted -mt-3 mb-4" aria-live="polite">
+          {visibleGroups.length} of {guestGroups.length} invitation{guestGroups.length === 1 ? "" : "s"} match &ldquo;{query}&rdquo;
+        </p>
       )}
 
       {/* Error */}
@@ -268,10 +301,23 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
         </div>
       ) : visibleGroups.length === 0 ? (
         <div className="glass-dark rounded-2xl p-12 text-center">
-          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" ? "🎉" : "🔍"}</div>
+          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query ? "🎉" : "🔍"}</div>
           <p className="text-admin-text-muted text-sm">
-            {filter === "not_sent" ? "Every invitation has been sent." : "No invitations match this filter."}
+            {query
+              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" ? " in this filter" : ""}.</>
+              : filter === "not_sent"
+                ? "Every invitation has been sent."
+                : "No invitations match this filter."}
           </p>
+          {query && (
+            <Link
+              href={`/admin/events/${weddingId}/dashboard${filter !== "all" ? `?filter=${filter}` : ""}`}
+              scroll={false}
+              className="inline-block mt-4 text-sm text-admin-accent hover:underline"
+            >
+              Clear search
+            </Link>
+          )}
         </div>
       ) : (
         <>
