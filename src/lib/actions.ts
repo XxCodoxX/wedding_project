@@ -4,6 +4,7 @@ import { createServerClient, type Guest } from "@/lib/supabase";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { encryptGuestId } from "@/lib/crypto";
+import { normalizePhone, isMissingPhoneColumn, PHONE_MIGRATION_ERROR } from "@/lib/phone";
 import {
   importPayloadSchema,
   duplicateKey,
@@ -305,10 +306,16 @@ export async function createGuest(formData: FormData) {
   const invitationType = (formData.get("invitation_type") as string) || "individual";
   const groupLabel = (formData.get("group_label") as string) || null;
   const membersJson = (formData.get("members") as string) || null;
+  const phoneResult = normalizePhone(formData.get("phone") as string | null);
 
   if (!weddingId?.trim()) {
     return { error: "Wedding ID is required" };
   }
+  if (!phoneResult.ok) {
+    return { error: phoneResult.error };
+  }
+  // Only send the column when set, so guests without phones still save before migration 11 is run.
+  const phoneField = phoneResult.value ? { phone: phoneResult.value } : {};
 
   const hasAccess = await canAccessWedding(weddingId);
   if (!hasAccess) {
@@ -333,10 +340,14 @@ export async function createGuest(formData: FormData) {
         group_id: null,
         group_label: null,
         is_primary: true,
+        ...phoneField,
       })
       .select()
       .single();
 
+    if (isMissingPhoneColumn(insertError)) {
+      return { error: PHONE_MIGRATION_ERROR };
+    }
     if (insertError || !guest) {
       return { error: insertError?.message || "Failed to create guest" };
     }
@@ -380,6 +391,7 @@ export async function createGuest(formData: FormData) {
     group_id: groupId,
     group_label: effectiveGroupLabel,
     is_primary: idx === 0,
+    ...(idx === 0 ? phoneField : {}),
   }));
 
   const { data: insertedGuests, error: insertError } = await supabase
@@ -387,6 +399,9 @@ export async function createGuest(formData: FormData) {
     .insert(memberRows)
     .select();
 
+  if (isMissingPhoneColumn(insertError)) {
+    return { error: PHONE_MIGRATION_ERROR };
+  }
   if (insertError || !insertedGuests || insertedGuests.length === 0) {
     return { error: insertError?.message || "Failed to create guest group" };
   }
@@ -403,7 +418,7 @@ type GuestInsert = Omit<Guest, "rsvp_status" | "created_at">;
 export interface ImportGuestsResult {
   success?: boolean;
   error?: string;
-  created?: { name: string; type: InvitationType; members: string[]; code: string }[];
+  created?: { name: string; type: InvitationType; members: string[]; phone: string | null; code: string }[];
   skipped?: { row: number; name: string; reason: string }[];
 }
 
@@ -457,6 +472,10 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
 
     // Build every row up-front with explicit IDs so we can return invite codes
     // without a second query, then insert in ONE statement (atomic: all or nothing).
+    // Omit the phone column entirely when the file has no phones (works before migration 11).
+    const hasPhones = toCreate.some((inv) => inv.phone);
+    const phoneOf = (inv: ImportInvitation) => (hasPhones ? { phone: inv.phone } : {});
+
     const rows = toCreate.flatMap((inv): GuestInsert[] => {
       if (inv.type === "individual") {
         return [{
@@ -468,6 +487,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
           group_id: null,
           group_label: null,
           is_primary: true,
+          ...phoneOf(inv),
         }];
       }
       const groupId = crypto.randomUUID();
@@ -480,10 +500,14 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
         group_id: groupId,
         group_label: inv.name,
         is_primary: idx === 0,
+        ...(idx === 0 ? phoneOf(inv) : {}),
       }));
     });
 
     const { error: insertError } = await supabase.from("guests").insert(rows);
+    if (isMissingPhoneColumn(insertError)) {
+      return { error: PHONE_MIGRATION_ERROR };
+    }
     if (insertError) {
       return { error: `Import failed, no guests were added: ${insertError.message}` };
     }
@@ -494,6 +518,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
       name: inv.name,
       type: inv.type,
       members: inv.members,
+      phone: inv.phone,
       code: encryptGuestId(primaries[i].id),
     }));
 
@@ -515,6 +540,10 @@ export async function updateGuest(guestId: string, formData: FormData) {
   const invitationType = (formData.get("invitation_type") as string) || "individual";
   const groupLabel = (formData.get("group_label") as string) || null;
   const membersJson = (formData.get("members") as string) || null;
+  const phoneResult = normalizePhone(formData.get("phone") as string | null);
+  if (!phoneResult.ok) {
+    return { error: phoneResult.error };
+  }
 
   let targetWeddingId = weddingId;
   if (!targetWeddingId) {
@@ -570,6 +599,9 @@ export async function updateGuest(guestId: string, formData: FormData) {
     if (updateError) {
       return { error: updateError.message };
     }
+
+    const phoneError = await saveGuestPhone(supabase, guestId, phoneResult.value);
+    if (phoneError) return { error: phoneError };
 
     if (targetWeddingId) {
       revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
@@ -656,6 +688,10 @@ export async function updateGuest(guestId: string, formData: FormData) {
     await supabase.from("guests").insert(newRows);
   }
 
+  // The edited guest is always the invitation's primary, which holds the phone.
+  const phoneError = await saveGuestPhone(supabase, guestId, phoneResult.value);
+  if (phoneError) return { error: phoneError };
+
   if (targetWeddingId) {
     revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
     revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
@@ -712,6 +748,20 @@ export async function deleteGuest(guestId: string, weddingId?: string) {
   return { success: true };
 }
 
+
+// ---------- Helper: Save Guest Phone ----------
+/** Sets/clears the phone on a primary guest. Returns an error message, or null on success. */
+async function saveGuestPhone(
+  supabase: ReturnType<typeof createServerClient>,
+  guestId: string,
+  phone: string | null
+): Promise<string | null> {
+  const { error } = await supabase.from("guests").update({ phone }).eq("id", guestId);
+  if (!error) return null;
+  // Column not created yet and nothing to store → nothing to do.
+  if (isMissingPhoneColumn(error)) return phone ? PHONE_MIGRATION_ERROR : null;
+  return `Failed to save phone number: ${error.message}`;
+}
 
 // ---------- Helper: Handle Removed URLs ----------
 async function handleRemovedUrls(

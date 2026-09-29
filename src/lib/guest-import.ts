@@ -8,9 +8,11 @@
  *   Type     | individual / couple / family  (optional — inferred from Members)
  *   Name     | Name shown as "Dear …"        (required for individual & family)
  *   Members  | People in a couple/family, separated by ; | , or new line
+ *   Phone    | Optional WhatsApp number (0771234567 or +94771234567)
  *   Message  | Optional personal note
  */
 import { z } from "zod";
+import { normalizePhone } from "@/lib/phone";
 
 export const IMPORT_LIMITS = {
   maxInvitations: 500,
@@ -38,6 +40,8 @@ export const importInvitationSchema = z
     name: nameSchema,
     members: z.array(nameSchema).max(IMPORT_LIMITS.maxMembersPerInvitation),
     message: z.string().trim().max(IMPORT_LIMITS.maxMessageLength).nullable(),
+    // Already normalised to E.164 by normalizeRow; re-checked strictly on the server.
+    phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Invalid phone number").nullable(),
   })
   .superRefine((inv, ctx) => {
     if (inv.type === "individual" && inv.members.length > 0) {
@@ -66,7 +70,7 @@ export type ImportPayload = z.infer<typeof importPayloadSchema>;
 
 // ---------- Header mapping ----------
 
-type Field = "type" | "name" | "members" | "message";
+type Field = "type" | "name" | "members" | "message" | "phone";
 
 /** Accepted header spellings (compared after lowercasing & stripping non-letters). */
 const HEADER_ALIASES: Record<Field, string[]> = {
@@ -74,6 +78,7 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   name: ["name", "guestname", "groupname", "familyname", "invitationname", "label", "displayname"],
   members: ["members", "membernames", "people", "guests", "persons"],
   message: ["message", "custommessage", "note", "notes", "personalmessage"],
+  phone: ["phone", "phonenumber", "mobile", "mobilenumber", "whatsapp", "whatsappnumber", "contact", "contactnumber", "tel", "telephone"],
 };
 
 const normalizeHeader = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
@@ -131,6 +136,7 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
   let members = splitMembers(get("members"));
   const message = (get("message") ?? "").trim() || null;
   const parsedType = parseType(get("type"));
+  const phone = normalizePhone(get("phone"));
 
   if (parsedType === "invalid") {
     return { ok: false, row: rowNumber, errors: [`Unknown type "${get("type").trim()}" — use individual, couple or family`] };
@@ -154,7 +160,11 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
     return { ok: false, row: rowNumber, errors: ['Family needs a Name, e.g. "The Silva Family"'] };
   }
 
-  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message });
+  if (!phone.ok) {
+    return { ok: false, row: rowNumber, errors: [phone.error] };
+  }
+
+  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message, phone: phone.value });
   if (!parsed.success) {
     return { ok: false, row: rowNumber, errors: [...new Set(parsed.error.issues.map((i) => i.message))] };
   }

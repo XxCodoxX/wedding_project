@@ -32,6 +32,8 @@ export interface Guest {
   group_id: string | null;
   group_label: string | null;
   is_primary: boolean;
+  /** E.164 WhatsApp number, on the primary guest only. Null until migration 11 is run. */
+  phone?: string | null;
   rsvp_status: "pending" | "attending" | "not_attending";
   created_at: string;
 }

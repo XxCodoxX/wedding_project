@@ -7,6 +7,7 @@ import InviteLinkDisplay from "./InviteLinkDisplay";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 
 import type { Wedding, Guest } from "@/lib/supabase";
+import { normalizePhone } from "@/lib/phone";
 
 type InvitationType = "individual" | "couple" | "family";
 
@@ -24,6 +25,7 @@ interface GuestFormProps {
   initialData?: {
     guest_name: string;
     custom_message: string | null;
+    phone?: string | null;
     invitation_type?: InvitationType;
     group_label?: string | null;
     members?: MemberEntry[];
@@ -53,6 +55,8 @@ export default function GuestForm({
   const [customMessage, setCustomMessage] = useState(
     initialData?.custom_message || ""
   );
+  const [phone, setPhone] = useState(initialData?.phone || "");
+  const phoneCheck = normalizePhone(phone);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savedInviteCode, setSavedInviteCode] = useState(inviteCode || "");
@@ -101,6 +105,7 @@ export default function GuestForm({
       formData.set("wedding_id", weddingId);
       formData.set("invitation_type", invitationType);
       formData.set("custom_message", customMessage);
+      formData.set("phone", phone);
 
       if (invitationType === "individual") {
         formData.set("guest_name", guestName);
@@ -339,6 +344,40 @@ export default function GuestForm({
             </div>
           </div>
         )}
+
+        {/* ── WhatsApp Number ── */}
+        <div>
+          <label
+            htmlFor="phone"
+            className="block text-sm font-medium text-admin-text-muted mb-2"
+          >
+            WhatsApp Number{" "}
+            <span className="text-admin-text-muted/40">(optional)</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder='e.g. "0771234567" or "+94771234567"'
+            aria-invalid={!phoneCheck.ok}
+            aria-describedby="phone-hint"
+            className={`w-full px-4 py-3 rounded-xl bg-admin-bg border text-admin-text placeholder-admin-text-muted/50 focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all ${
+              phoneCheck.ok ? "border-admin-border" : "border-admin-danger"
+            }`}
+          />
+          <p id="phone-hint" className={`mt-1.5 text-xs ${phoneCheck.ok ? "text-admin-text-muted/60" : "text-admin-danger"}`}>
+            {!phoneCheck.ok
+              ? phoneCheck.error
+              : phoneCheck.value
+                ? `WhatsApp will open a chat with ${phoneCheck.value}`
+                : invitationType === "individual"
+                  ? "Lets the WhatsApp button open this guest's chat directly"
+                  : "One number for the whole invitation — the WhatsApp button opens this chat directly"}
+          </p>
+        </div>
 
         {/* ── Custom Message ── */}
         <div>

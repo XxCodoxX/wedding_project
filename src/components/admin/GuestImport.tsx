@@ -13,6 +13,7 @@ import {
   type SheetAnalysis,
 } from "@/lib/guest-import";
 import { ACCEPTED_EXTENSIONS, readSpreadsheet, toCsv } from "@/lib/guest-import-reader";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/phone";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import CopyLinkButtonClient from "@/app/admin/events/[id]/dashboard/CopyLinkButtonClient";
 
@@ -132,8 +133,8 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
     if (stage.kind !== "done") return;
     const origin = window.location.origin;
     const csv = toCsv([
-      ["Type", "Name", "Members", "Invite Link"],
-      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), `${origin}/invite/${c.code}`]),
+      ["Type", "Name", "Members", "Phone", "Invite Link"],
+      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), c.phone ?? "", `${origin}/invite/${c.code}`]),
     ]);
     // BOM so Excel opens UTF-8 names (Sinhala/Tamil etc.) correctly.
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -244,11 +245,13 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
                       <div className="text-sm font-medium text-admin-text truncate">
                         <span aria-hidden>{TYPE_ICON[c.type]}</span> {c.name}
                       </div>
-                      {c.members.length > 0 && (
-                        <div className="text-xs text-admin-text-muted truncate">{c.members.join(", ")}</div>
+                      {(c.members.length > 0 || c.phone) && (
+                        <div className="text-xs text-admin-text-muted truncate">
+                          {[c.members.join(", "), c.phone].filter(Boolean).join(" · ")}
+                        </div>
                       )}
                     </div>
-                    <CopyLinkButtonClient code={c.code} wedding={wedding} guest={{ guest_name: c.name, group_label: c.name }} />
+                    <CopyLinkButtonClient code={c.code} wedding={wedding} guest={{ guest_name: c.name, group_label: c.name, phone: c.phone }} />
                   </li>
                 ))}
               </ul>
@@ -291,6 +294,7 @@ function FormatGuide() {
             <tr><td className="py-2 pr-4 font-mono">Type</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2"><code>individual</code>, <code>couple</code> or <code>family</code>. Leave blank to auto-detect from Members (0–1 → individual, 2 → couple, 3+ → family).</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Name</td><td className="py-2 pr-4 text-admin-text-muted">Yes*</td><td className="py-2">Shown as &quot;Dear …&quot;. e.g. <em>Sarah Johnson</em>, <em>Mr. &amp; Mrs. Fernando</em>, <em>The Silva Family</em>. *Optional for couples — defaults to &quot;A &amp; B&quot;.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Members</td><td className="py-2 pr-4 text-admin-text-muted">Couple/Family</td><td className="py-2">Each person who can RSVP, separated by <code>;</code> (or one per line inside the cell). Couple = exactly 2, Family = 2 or more. Leave blank for individuals.</td></tr>
+            <tr><td className="py-2 pr-4 font-mono">Phone</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">WhatsApp number, e.g. <code>0771234567</code> or <code>+94771234567</code>. Numbers without a country code get <code>+{DEFAULT_COUNTRY_CODE}</code>. One number per invitation.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Message</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">Optional personal note on the invitation.</td></tr>
           </tbody>
         </table>
@@ -361,6 +365,7 @@ function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDupl
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Members</th>
+                  <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Message</th>
                 </tr>
               </thead>
@@ -376,6 +381,7 @@ function Preview({ fileName, analysis, duplicateRows, skipDuplicates, onSkipDupl
                         {dup && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-admin-warning/15 text-admin-warning">duplicate</span>}
                       </td>
                       <td className="px-4 py-2.5 text-admin-text-muted">{inv.members.join(", ") || "—"}</td>
+                      <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap">{inv.phone || "—"}</td>
                       <td className="px-4 py-2.5 text-admin-text-muted max-w-60 truncate">{inv.message || "—"}</td>
                     </tr>
                   );

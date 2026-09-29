@@ -65,7 +65,8 @@ export default function InviteLinkDisplay({
   };
 
   const handleWhatsApp = () => {
-    const waUrl = getWhatsAppShareUrl(messageText, phoneNumber);
+    // Opens the guest's chat directly when a number is saved; otherwise WhatsApp asks for a contact.
+    const waUrl = getWhatsAppShareUrl(messageText, phoneNumber ?? guest?.phone ?? undefined);
     window.open(waUrl, "_blank");
   };
 
