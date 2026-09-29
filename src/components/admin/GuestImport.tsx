@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import type { Wedding } from "@/lib/supabase";
@@ -21,6 +21,12 @@ interface GuestImportProps {
   wedding: Partial<Wedding>;
   /** Labels of invitations that already exist for this event (for duplicate warnings). */
   existingNames: string[];
+  /** Called once invitations were created (e.g. to refresh the guest list behind a modal). */
+  onImported?: () => void;
+  /** Reports reading/importing so a parent modal can block closing mid-import. */
+  onBusyChange?: (busy: boolean) => void;
+  /** When rendered in a modal: replaces the "Go to Guest List" link with a Done button. */
+  onClose?: () => void;
 }
 
 type Stage =
@@ -34,7 +40,7 @@ const TYPE_ICON: Record<ImportInvitation["type"], string> = {
   family: "👨‍👩‍👧‍👦",
 };
 
-export default function GuestImport({ weddingId, wedding, existingNames }: GuestImportProps) {
+export default function GuestImport({ weddingId, wedding, existingNames, onImported, onBusyChange, onClose }: GuestImportProps) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [reading, setReading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -42,6 +48,10 @@ export default function GuestImport({ weddingId, wedding, existingNames }: Guest
   const [error, setError] = useState("");
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    onBusyChange?.(reading || importing);
+  }, [reading, importing, onBusyChange]);
 
   const existingKeys = useMemo(() => new Set(existingNames.map(duplicateKey)), [existingNames]);
 
@@ -108,6 +118,7 @@ export default function GuestImport({ weddingId, wedding, existingNames }: Guest
       const skipped = result.skipped ?? [];
       toast.success(`${created.length} invitation${created.length === 1 ? "" : "s"} created`);
       setStage({ kind: "done", result: { created, skipped } });
+      if (created.length > 0) onImported?.();
     } catch {
       const msg = "An unexpected error occurred during import.";
       setError(msg);
@@ -209,9 +220,15 @@ export default function GuestImport({ weddingId, wedding, existingNames }: Guest
                   Download Invite Links (CSV)
                 </button>
               )}
-              <Link href={`/admin/events/${weddingId}/dashboard`} className="px-5 py-2.5 rounded-xl border border-admin-border text-admin-text text-sm font-medium text-center hover:bg-admin-border/20 transition-all">
-                Go to Guest List
-              </Link>
+              {onClose ? (
+                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-admin-border text-admin-text text-sm font-medium text-center hover:bg-admin-border/20 transition-all cursor-pointer">
+                  Done
+                </button>
+              ) : (
+                <Link href={`/admin/events/${weddingId}/dashboard`} className="px-5 py-2.5 rounded-xl border border-admin-border text-admin-text text-sm font-medium text-center hover:bg-admin-border/20 transition-all">
+                  Go to Guest List
+                </Link>
+              )}
               <button type="button" onClick={reset} className="px-5 py-2.5 rounded-xl text-admin-text-muted text-sm hover:text-admin-text transition-all cursor-pointer">
                 Import another file
               </button>

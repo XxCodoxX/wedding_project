@@ -5,6 +5,7 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/admin/Breadcrumbs";
 import DeleteGuestButton from "./DeleteGuestButton";
 import CopyLinkButtonClient from "./CopyLinkButtonClient";
+import ImportGuestsButton from "./ImportGuestsButton";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 
@@ -126,15 +127,11 @@ export default async function DashboardPage({ params }: PageProps) {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <Link
-            href={`/admin/events/${weddingId}/guests/import`}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-admin-accent/40 text-admin-accent text-sm font-medium hover:bg-admin-accent/10 transition-all duration-200"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            Import CSV / Excel
-          </Link>
+          <ImportGuestsButton
+            weddingId={weddingId}
+            wedding={wedding}
+            existingNames={guestGroups.map((g) => g.label)}
+          />
           <Link
             href={`/admin/events/${weddingId}/guests/new`}
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-admin-accent text-white text-sm font-medium hover:bg-admin-accent-light transition-all duration-200"
