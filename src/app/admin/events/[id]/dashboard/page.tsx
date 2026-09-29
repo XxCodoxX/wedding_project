@@ -8,6 +8,7 @@ import CopyLinkButtonClient from "./CopyLinkButtonClient";
 import ImportGuestsButton from "./ImportGuestsButton";
 import SendQueueButton, { type QueueItem } from "./SendQueueButton";
 import InviteStatusCell from "./InviteStatusCell";
+import LiveGuestUpdates from "./LiveGuestUpdates";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
@@ -150,8 +151,9 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
           <h1 className="text-xl sm:text-2xl font-semibold text-admin-text">
             {wedding.groom_name} & {wedding.bride_name}&apos;s Wedding
           </h1>
-          <p className="text-admin-text-muted text-sm mt-1">
+          <p className="text-admin-text-muted text-sm mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             Manage guests and invitations for this event
+            <LiveGuestUpdates weddingId={weddingId} />
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">

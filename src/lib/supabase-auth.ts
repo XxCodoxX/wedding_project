@@ -1,5 +1,4 @@
 import { createServerClient as createSSRServerClient } from "@supabase/ssr";
-import { createBrowserClient as createSSRBrowserClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -30,17 +29,6 @@ export async function createAuthServerClient() {
         },
       },
     }
-  );
-}
-
-/**
- * Create a Supabase client for use in Client Components.
- * This uses the browser's built-in cookie handling.
- */
-export function createAuthBrowserClient() {
-  return createSSRBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
 
