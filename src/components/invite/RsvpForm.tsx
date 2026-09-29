@@ -396,27 +396,33 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
               </div>
             )}
 
-            {/* Per-Member RSVP */}
-            <div className="space-y-3">
+            {/* Per-Member RSVP.
+                Layout follows the CARD's width (container query), not the viewport: templates
+                render this in narrow cards even on desktop, where a side-by-side row would
+                squeeze the name down to "S…". */}
+            <div className="@container space-y-3">
               {groupMembers.map((member) => {
                 const s = memberStatuses[member.id];
                 return (
                   <div
                     key={member.id}
-                    className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl bg-white/70 border border-gold/20 shadow-2xs transition-all"
+                    role="group"
+                    aria-label={`RSVP for ${member.name}`}
+                    className="flex flex-col @md:flex-row items-stretch @md:items-center justify-between gap-3 p-3.5 @md:p-4 rounded-xl bg-white/70 border border-gold/20 shadow-2xs transition-all"
                   >
-                    <div className="text-left min-w-0">
-                      <p className="font-cormorant text-lg sm:text-xl text-navy font-semibold truncate">
+                    <div className="text-center @md:text-left min-w-0">
+                      <p className="font-cormorant text-xl text-navy font-semibold leading-snug wrap-break-word">
                         {member.name}
                       </p>
                     </div>
 
-                    {/* Buttons: 50/50 grid on mobile, flex on desktop */}
-                    <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:shrink-0">
+                    {/* Buttons: 50/50 grid when narrow, inline when the card is wide */}
+                    <div className="grid grid-cols-2 gap-2.5 w-full @md:w-auto @md:flex @md:shrink-0">
                       <button
                         type="button"
                         onClick={() => setMemberStatus(member.id, "attending")}
-                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
+                        aria-pressed={s === "attending"}
+                        className={`w-full @md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           s === "attending"
                             ? "bg-sage text-white shadow-md shadow-sage/30 border border-sage font-bold"
                             : "bg-white/80 hover:bg-sage/10 text-sage-dark border border-sage/35 hover:border-sage shadow-2xs"
@@ -430,7 +436,8 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
                       <button
                         type="button"
                         onClick={() => setMemberStatus(member.id, "not_attending")}
-                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
+                        aria-pressed={s === "not_attending"}
+                        className={`w-full @md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold font-outfit tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                           s === "not_attending"
                             ? "bg-rose text-white shadow-md shadow-rose/30 border border-rose font-bold"
                             : "bg-white/80 hover:bg-rose/10 text-rose border border-rose/35 hover:border-rose shadow-2xs"
