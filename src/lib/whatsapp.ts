@@ -83,6 +83,31 @@ export function formatWhatsAppMessage({
 }
 
 /**
+ * Everything needed to send one invitation on WhatsApp: the invite URL, the personalised
+ * message, and the WhatsApp URL (opens the guest's chat directly when a phone is saved).
+ * Browser-only: uses window.location.origin for the invite link.
+ */
+export function buildWhatsAppInvite({
+  code,
+  wedding,
+  guest,
+}: {
+  code: string;
+  wedding?: Partial<Wedding> | null;
+  guest?: Partial<Guest> | null;
+}) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const inviteUrl = `${origin}/invite/${code}`;
+  const message = formatWhatsAppMessage({
+    template: wedding?.whatsapp_message_template,
+    wedding,
+    guest,
+    inviteUrl,
+  });
+  return { inviteUrl, message, waUrl: getWhatsAppShareUrl(message, guest?.phone ?? undefined) };
+}
+
+/**
  * Creates an `https://api.whatsapp.com/send` or `https://wa.me` share URL.
  */
 export function getWhatsAppShareUrl(text: string, phone?: string): string {

@@ -34,6 +34,11 @@ export interface Guest {
   is_primary: boolean;
   /** E.164 WhatsApp number, on the primary guest only. Null until migration 11 is run. */
   phone?: string | null;
+  /** Delivery tracking (primary guest only). Undefined until migration 12 is run. */
+  invite_sent_at?: string | null;
+  invite_first_opened_at?: string | null;
+  invite_last_opened_at?: string | null;
+  invite_open_count?: number;
   rsvp_status: "pending" | "attending" | "not_attending";
   created_at: string;
 }

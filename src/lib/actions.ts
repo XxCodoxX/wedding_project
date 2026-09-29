@@ -5,6 +5,7 @@ import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { encryptGuestId } from "@/lib/crypto";
 import { normalizePhone, isMissingPhoneColumn, PHONE_MIGRATION_ERROR } from "@/lib/phone";
+import { isMissingTrackingColumn, TRACKING_MIGRATION_ERROR } from "@/lib/invite-tracking";
 import {
   importPayloadSchema,
   duplicateKey,
@@ -418,7 +419,7 @@ type GuestInsert = Omit<Guest, "rsvp_status" | "created_at">;
 export interface ImportGuestsResult {
   success?: boolean;
   error?: string;
-  created?: { name: string; type: InvitationType; members: string[]; phone: string | null; code: string }[];
+  created?: { guestId: string; name: string; type: InvitationType; members: string[]; phone: string | null; code: string }[];
   skipped?: { row: number; name: string; reason: string }[];
 }
 
@@ -515,6 +516,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
     // Primary rows appear in the same order as toCreate.
     const primaries = rows.filter((r) => r.is_primary);
     const created = toCreate.map((inv, i) => ({
+      guestId: primaries[i].id,
       name: inv.name,
       type: inv.type,
       members: inv.members,
@@ -697,6 +699,44 @@ export async function updateGuest(guestId: string, formData: FormData) {
     revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
   }
   return { success: true, guestId };
+}
+
+// ---------- Mark Invitation Sent ----------
+/**
+ * Records (or clears) that the WhatsApp invite was sent. WhatsApp can't tell us whether the
+ * message was really sent from a wa.me link, so this is the admin's confirmation.
+ */
+export async function markInviteSent(guestId: string, sent: boolean) {
+  if (typeof guestId !== "string" || !/^[0-9a-f-]{36}$/i.test(guestId)) {
+    return { error: "Invalid guest ID" };
+  }
+
+  try {
+    const supabase = createServerClient();
+    const { data: guest, error: fetchError } = await supabase
+      .from("guests")
+      .select("wedding_id, is_primary")
+      .eq("id", guestId)
+      .single();
+
+    if (fetchError || !guest) return { error: "Guest not found" };
+    if (!(await canAccessWedding(guest.wedding_id))) {
+      return { error: "Unauthorized: You don't have access to this event" };
+    }
+    if (!guest.is_primary) return { error: "Only the main guest of an invitation can be marked as sent" };
+
+    const sentAt = sent ? new Date().toISOString() : null;
+    const { error } = await supabase.from("guests").update({ invite_sent_at: sentAt }).eq("id", guestId);
+
+    if (isMissingTrackingColumn(error)) return { error: TRACKING_MIGRATION_ERROR };
+    if (error) return { error: `Failed to update invite status: ${error.message}` };
+
+    revalidatePath(`/admin/events/${guest.wedding_id}/dashboard`);
+    return { success: true, sentAt };
+  } catch (e) {
+    console.error("markInviteSent failed:", e);
+    return { error: "An unexpected error occurred" };
+  }
 }
 
 // ---------- Delete Guest ----------

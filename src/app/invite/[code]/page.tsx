@@ -5,6 +5,9 @@ import type { Guest, Wedding } from "@/lib/supabase";
 import { getTemplateById } from "@/templates/registry";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { cookies, headers } from "next/headers";
+import { hasAdminSessionCookie, isLinkPreviewBot, isPrefetchRequest } from "@/lib/invite-tracking";
 
 interface PageProps {
   params: Promise<{ code: string }>;
@@ -118,6 +121,22 @@ export default async function InvitePage({ params }: PageProps) {
   }
 
   const TemplateComponent = templateDefinition.component;
+
+  // Record the open AFTER the response is sent, so tracking never slows the invitation down.
+  // Request data must be read here — Server Components can't read headers/cookies inside after().
+  const [requestHeaders, requestCookies] = await Promise.all([headers(), cookies()]);
+  const shouldTrack =
+    !isLinkPreviewBot(requestHeaders.get("user-agent")) &&
+    !isPrefetchRequest(requestHeaders) &&
+    !hasAdminSessionCookie(requestCookies.getAll().map((c) => c.name));
+
+  if (shouldTrack) {
+    after(async () => {
+      const { error: trackError } = await supabase.rpc("record_invite_open", { p_guest_id: typedGuest.id });
+      // Missing function (migration 12 not run) must never break the invitation — just log.
+      if (trackError) console.warn("record_invite_open failed:", trackError.message);
+    });
+  }
 
   return (
     <TemplateComponent

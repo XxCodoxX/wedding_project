@@ -6,6 +6,9 @@ import Breadcrumbs from "@/components/admin/Breadcrumbs";
 import DeleteGuestButton from "./DeleteGuestButton";
 import CopyLinkButtonClient from "./CopyLinkButtonClient";
 import ImportGuestsButton from "./ImportGuestsButton";
+import SendQueueButton, { type QueueItem } from "./SendQueueButton";
+import InviteStatusCell from "./InviteStatusCell";
+import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 
@@ -13,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ filter?: string | string[] }>;
 }
 
 // Group guests by group_id for display
@@ -66,7 +70,7 @@ function groupGuests(guestList: Guest[]): GuestGroup[] {
   return [...allGroups, ...individuals];
 }
 
-export default async function DashboardPage({ params }: PageProps) {
+export default async function DashboardPage({ params, searchParams }: PageProps) {
   const profile = await getUserProfile();
   if (!profile) {
     redirect("/admin/login");
@@ -107,6 +111,30 @@ export default async function DashboardPage({ params }: PageProps) {
   const notAttending = guestList.filter((g) => g.rsvp_status === "not_attending").length;
   const pending = guestList.filter((g) => g.rsvp_status === "pending").length;
 
+  // Delivery tracking (per invitation, stored on the primary guest)
+  const filter = parseInviteFilter((await searchParams).filter);
+  const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
+  const deliveryCounts: Record<InviteFilter, number> = {
+    all: guestGroups.length,
+    not_sent: guestGroups.filter((g) => statusOf(g) === "not_sent").length,
+    sent: guestGroups.filter((g) => statusOf(g) === "sent").length,
+    opened: guestGroups.filter((g) => statusOf(g) === "opened").length,
+  };
+  const visibleGroups = filter === "all" ? guestGroups : guestGroups.filter((g) => statusOf(g) === filter);
+
+  // Oldest first, so invitations go out in the order they were added.
+  const sendQueue: QueueItem[] = guestGroups
+    .filter((g) => statusOf(g) === "not_sent")
+    .reverse()
+    .map((g) => ({
+      guestId: g.primaryGuest.id,
+      label: g.label,
+      type: g.type,
+      members: g.members.map((m) => m.guest_name),
+      phone: g.primaryGuest.phone ?? null,
+      code: g.inviteCode,
+    }));
+
   return (
     <div>
       <div className="mb-4">
@@ -127,6 +155,7 @@ export default async function DashboardPage({ params }: PageProps) {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <SendQueueButton wedding={wedding} items={sendQueue} />
           <ImportGuestsButton
             weddingId={weddingId}
             wedding={wedding}
@@ -183,6 +212,34 @@ export default async function DashboardPage({ params }: PageProps) {
         />
       </div>
 
+      {/* Delivery filter */}
+      {guestGroups.length > 0 && (
+        <nav aria-label="Filter by invitation delivery" className="flex flex-wrap gap-2 mb-6">
+          {DELIVERY_TABS.map((tab) => {
+            const active = filter === tab.value;
+            return (
+              <Link
+                key={tab.value}
+                href={tab.value === "all" ? `/admin/events/${weddingId}/dashboard` : `/admin/events/${weddingId}/dashboard?filter=${tab.value}`}
+                aria-current={active ? "page" : undefined}
+                scroll={false}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm border transition-all ${
+                  active
+                    ? "border-admin-accent bg-admin-accent/10 text-admin-accent"
+                    : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+                }`}
+              >
+                <span aria-hidden>{tab.icon}</span>
+                {tab.label}
+                <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-admin-accent/20" : "bg-admin-border/30"}`}>
+                  {deliveryCounts[tab.value]}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
+
       {/* Error */}
       {error && (
         <div className="p-4 rounded-xl bg-admin-danger/10 border border-admin-danger/20 text-admin-danger text-sm mb-6">
@@ -207,6 +264,13 @@ export default async function DashboardPage({ params }: PageProps) {
             Add Your First Invitation
           </Link>
         </div>
+      ) : visibleGroups.length === 0 ? (
+        <div className="glass-dark rounded-2xl p-12 text-center">
+          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" ? "🎉" : "🔍"}</div>
+          <p className="text-admin-text-muted text-sm">
+            {filter === "not_sent" ? "Every invitation has been sent." : "No invitations match this filter."}
+          </p>
+        </div>
       ) : (
         <>
           {/* Desktop Table View */}
@@ -225,6 +289,9 @@ export default async function DashboardPage({ params }: PageProps) {
                       RSVP Status
                     </th>
                     <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Invite
+                    </th>
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
                       Invite Link
                     </th>
                     <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
@@ -236,7 +303,7 @@ export default async function DashboardPage({ params }: PageProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-admin-border/50">
-                  {guestGroups.map((group) => (
+                  {visibleGroups.map((group) => (
                     <tr
                       key={group.primaryGuest.id}
                       className="hover:bg-admin-border/10 transition-colors"
@@ -278,6 +345,9 @@ export default async function DashboardPage({ params }: PageProps) {
                         )}
                       </td>
                       <td className="px-6 py-4">
+                        <InviteStatusCell guest={group.primaryGuest} />
+                      </td>
+                      <td className="px-6 py-4">
                         <CopyLinkButton
                           code={group.inviteCode}
                           wedding={wedding}
@@ -310,7 +380,7 @@ export default async function DashboardPage({ params }: PageProps) {
 
           {/* Mobile Card View */}
           <div className="space-y-3 md:hidden">
-            {guestGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <div
                 key={group.primaryGuest.id}
                 className="glass-dark rounded-2xl p-4"
@@ -346,6 +416,9 @@ export default async function DashboardPage({ params }: PageProps) {
                     <GroupRsvpSummary members={group.members} />
                   )}
                 </div>
+                <div className="mb-3">
+                  <InviteStatusCell guest={group.primaryGuest} />
+                </div>
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-admin-border/50">
                   <div className="flex items-center gap-2">
                     <CopyLinkButton
@@ -378,6 +451,13 @@ export default async function DashboardPage({ params }: PageProps) {
     </div>
   );
 }
+
+const DELIVERY_TABS: { value: InviteFilter; label: string; icon: string }[] = [
+  { value: "all", label: "All", icon: "💌" },
+  { value: "not_sent", label: "Not sent", icon: "○" },
+  { value: "sent", label: "Sent, not opened", icon: "📤" },
+  { value: "opened", label: "Opened", icon: "👀" },
+];
 
 // ---------- Sub-components ----------
 

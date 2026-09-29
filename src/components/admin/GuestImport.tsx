@@ -251,7 +251,7 @@ export default function GuestImport({ weddingId, wedding, existingNames, onImpor
                         </div>
                       )}
                     </div>
-                    <CopyLinkButtonClient code={c.code} wedding={wedding} guest={{ guest_name: c.name, group_label: c.name, phone: c.phone }} />
+                    <CopyLinkButtonClient code={c.code} wedding={wedding} guest={{ id: c.guestId, guest_name: c.name, group_label: c.name, phone: c.phone }} />
                   </li>
                 ))}
               </ul>
