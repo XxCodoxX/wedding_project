@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           ? `${wedding.groom_name} & ${wedding.bride_name}`
           : "Wedding Invitation";
       const guestName = guest.group_label || guest.guest_name;
-      const title = `${couple} — Wedding Invitation`;
+      const title = `${couple} - Wedding Invitation`;
       const description = `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
       // Couple's cover photo if set, otherwise the branded card. Never leave this empty:
       // page-level openGraph replaces the layout's, and WhatsApp then falls back to the favicon.
