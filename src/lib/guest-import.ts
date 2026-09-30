@@ -9,10 +9,12 @@
  *   Name     | Name shown as "Dear …"        (required for individual & family)
  *   Members  | People in a couple/family, separated by ; | , or new line
  *   Phone    | Optional WhatsApp number (0771234567 or +94771234567)
+ *   Side     | Optional: groom / bride
  *   Message  | Optional personal note
  */
 import { z } from "zod";
 import { normalizePhone } from "@/lib/phone";
+import { GUEST_SIDES, type GuestSide } from "@/lib/guest-side";
 
 export const IMPORT_LIMITS = {
   maxInvitations: 500,
@@ -42,6 +44,7 @@ export const importInvitationSchema = z
     message: z.string().trim().max(IMPORT_LIMITS.maxMessageLength).nullable(),
     // Already normalised to E.164 by normalizeRow; re-checked strictly on the server.
     phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Invalid phone number").nullable(),
+    side: z.enum(GUEST_SIDES).nullable(),
   })
   .superRefine((inv, ctx) => {
     if (inv.type === "individual" && inv.members.length > 0) {
@@ -69,7 +72,7 @@ export type ImportPayload = z.infer<typeof importPayloadSchema>;
 
 // ---------- Header mapping ----------
 
-type Field = "type" | "name" | "members" | "message" | "phone";
+type Field = "type" | "name" | "members" | "message" | "phone" | "side";
 
 /** Accepted header spellings (compared after lowercasing & stripping non-letters). */
 const HEADER_ALIASES: Record<Field, string[]> = {
@@ -78,6 +81,7 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   members: ["members", "membernames", "people", "guests", "persons"],
   message: ["message", "custommessage", "note", "notes", "personalmessage"],
   phone: ["phone", "phonenumber", "mobile", "mobilenumber", "whatsapp", "whatsappnumber", "contact", "contactnumber", "tel", "telephone"],
+  side: ["side", "guestside", "familyside", "invitedby", "relation"],
 };
 
 const normalizeHeader = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
@@ -120,6 +124,16 @@ function parseType(raw: string): InvitationType | "invalid" | null {
   return "invalid";
 }
 
+/** "Groom", "groom's side", "G" → "groom". Blank → null (not assigned). */
+function parseSide(raw: string): GuestSide | "invalid" | null {
+  // Letters only, minus a trailing "side": "Groom's side" → "groom", "Bride side" → "bride".
+  const t = raw.toLowerCase().replace(/[^a-z]/g, "").replace(/s?side$/, "");
+  if (!t) return null;
+  if (["groom", "grooms", "g", "husband"].includes(t)) return "groom";
+  if (["bride", "brides", "b", "wife"].includes(t)) return "bride";
+  return "invalid";
+}
+
 export type RowResult =
   | { ok: true; invitation: ImportInvitation }
   | { ok: false; row: number; errors: string[] };
@@ -136,9 +150,13 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
   const message = (get("message") ?? "").trim() || null;
   const parsedType = parseType(get("type"));
   const phone = normalizePhone(get("phone"));
+  const side = parseSide(get("side"));
 
   if (parsedType === "invalid") {
     return { ok: false, row: rowNumber, errors: [`Unknown type "${get("type").trim()}" — use individual, couple or family`] };
+  }
+  if (side === "invalid") {
+    return { ok: false, row: rowNumber, errors: [`Unknown side "${get("side").trim()}" — use groom or bride`] };
   }
 
   // Infer type from member count when the Type column is blank.
@@ -163,7 +181,7 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
     return { ok: false, row: rowNumber, errors: [phone.error] };
   }
 
-  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message, phone: phone.value });
+  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message, phone: phone.value, side });
   if (!parsed.success) {
     return { ok: false, row: rowNumber, errors: [...new Set(parsed.error.issues.map((i) => i.message))] };
   }

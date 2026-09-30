@@ -101,6 +101,7 @@ export default async function EditGuestPage({ params }: PageProps) {
           guest_name: guest.guest_name,
           custom_message: guest.custom_message,
           phone: guest.phone ?? null,
+          guest_side: guest.guest_side ?? null,
           invitation_type: invitationType,
           group_label: guest.group_label || null,
           members: groupMembers.length > 0 ? groupMembers : undefined,

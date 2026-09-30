@@ -34,6 +34,8 @@ export interface Guest {
   is_primary: boolean;
   /** E.164 WhatsApp number, on the primary guest only. Null until migration 11 is run. */
   phone?: string | null;
+  /** Bride's or groom's side, on every member of an invitation. Undefined until migration 14 is run. */
+  guest_side?: "bride" | "groom" | null;
   /** Delivery tracking (primary guest only). Undefined until migration 12 is run. */
   invite_sent_at?: string | null;
   invite_first_opened_at?: string | null;

@@ -8,6 +8,7 @@ import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 
 import type { Wedding, Guest } from "@/lib/supabase";
 import { normalizePhone } from "@/lib/phone";
+import { sideLabel, type GuestSide } from "@/lib/guest-side";
 
 type InvitationType = "individual" | "couple" | "family";
 
@@ -26,6 +27,7 @@ interface GuestFormProps {
     guest_name: string;
     custom_message: string | null;
     phone?: string | null;
+    guest_side?: GuestSide | null;
     invitation_type?: InvitationType;
     group_label?: string | null;
     members?: MemberEntry[];
@@ -56,6 +58,7 @@ export default function GuestForm({
     initialData?.custom_message || ""
   );
   const [phone, setPhone] = useState(initialData?.phone || "");
+  const [guestSide, setGuestSide] = useState<GuestSide | "">(initialData?.guest_side || "");
   const phoneCheck = normalizePhone(phone);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -106,6 +109,7 @@ export default function GuestForm({
       formData.set("invitation_type", invitationType);
       formData.set("custom_message", customMessage);
       formData.set("phone", phone);
+      formData.set("guest_side", guestSide);
 
       if (invitationType === "individual") {
         formData.set("guest_name", guestName);
@@ -152,6 +156,12 @@ export default function GuestForm({
     { value: "individual", icon: "👤", label: "Individual", desc: "Single person" },
     { value: "couple", icon: "👫", label: "Couple", desc: "Two people" },
     { value: "family", icon: "👨‍👩‍👧‍👦", label: "Family", desc: "3+ members" },
+  ];
+
+  const sideOptions: { value: GuestSide | ""; icon: string; label: string; desc: string }[] = [
+    { value: "groom", icon: "🤵", label: "Groom's side", desc: wedding?.groom_name?.trim() || "Groom" },
+    { value: "bride", icon: "👰", label: "Bride's side", desc: wedding?.bride_name?.trim() || "Bride" },
+    { value: "", icon: "➖", label: "Not set", desc: "Decide later" },
   ];
 
   return (
@@ -344,6 +354,55 @@ export default function GuestForm({
             </div>
           </div>
         )}
+
+        {/* ── Guest Side ── */}
+        <fieldset>
+          <legend className="block text-sm font-medium text-admin-text-muted mb-3">
+            Guest Side
+          </legend>
+          <div role="radiogroup" aria-label="Guest side" className="grid grid-cols-3 gap-3">
+            {sideOptions.map((opt) => {
+              const active = guestSide === opt.value;
+              return (
+                <button
+                  key={opt.value || "none"}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setGuestSide(opt.value)}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer min-w-0 ${
+                    active
+                      ? opt.value === "groom"
+                        ? "border-sky-500 bg-sky-500/10"
+                        : opt.value === "bride"
+                          ? "border-pink-500 bg-pink-500/10"
+                          : "border-admin-accent bg-admin-accent/10"
+                      : "border-admin-border hover:border-admin-accent/40 hover:bg-admin-border/10"
+                  }`}
+                >
+                  <span className="text-xl" aria-hidden>{opt.icon}</span>
+                  <span className={`text-sm font-semibold ${
+                    active
+                      ? opt.value === "groom"
+                        ? "text-sky-400"
+                        : opt.value === "bride"
+                          ? "text-pink-400"
+                          : "text-admin-accent"
+                      : "text-admin-text"
+                  }`}>
+                    {opt.label}
+                  </span>
+                  <span className="text-[10px] text-admin-text-muted truncate max-w-full">{opt.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-admin-text-muted/60">
+            {guestSide
+              ? `${sideLabel(guestSide, wedding)}${invitationType === "individual" ? "" : " — applies to every member"}`
+              : "Helps you filter and count guests by bride's or groom's side"}
+          </p>
+        </fieldset>
 
         {/* ── WhatsApp Number ── */}
         <div>

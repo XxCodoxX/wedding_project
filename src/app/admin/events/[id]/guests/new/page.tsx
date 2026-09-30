@@ -54,7 +54,7 @@ export default async function NewGuestPage({ params }: PageProps) {
       </div>
 
       {/* Form */}
-      <GuestForm mode="create" onSubmit={createGuest} weddingId={weddingId} />
+      <GuestForm mode="create" onSubmit={createGuest} weddingId={weddingId} wedding={wedding} />
     </div>
   );
 }

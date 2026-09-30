@@ -12,6 +12,7 @@ import LiveGuestUpdates from "./LiveGuestUpdates";
 import GuestSearch from "./GuestSearch";
 import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
+import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ filter?: string | string[]; q?: string | string[] }>;
+  searchParams: Promise<{ filter?: string | string[]; q?: string | string[]; side?: string | string[] }>;
 }
 
 // Group guests by group_id for display
@@ -114,9 +115,10 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
   const notAttending = guestList.filter((g) => g.rsvp_status === "not_attending").length;
   const pending = guestList.filter((g) => g.rsvp_status === "pending").length;
 
-  // Search (?q=) narrows the table; delivery filter (?filter=) is applied on top of it.
-  const { filter: rawFilter, q: rawQuery } = await searchParams;
+  // Search (?q=) narrows the table; side (?side=) and delivery (?filter=) filters are applied on top.
+  const { filter: rawFilter, q: rawQuery, side: rawSide } = await searchParams;
   const filter = parseInviteFilter(rawFilter);
+  const sideFilter = parseSideFilter(rawSide);
   const query = parseSearchQuery(rawQuery);
   const searchedGroups = query
     ? guestGroups.filter((g) =>
@@ -127,20 +129,39 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
       )
     : guestGroups;
 
-  // Delivery tracking (per invitation, stored on the primary guest). Counts follow the search.
+  // Delivery tracking (per invitation, stored on the primary guest).
+  // Each filter's counts follow the search AND the other filter, so the numbers always add up.
   const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
-  const deliveryCounts: Record<InviteFilter, number> = {
-    all: searchedGroups.length,
-    not_sent: searchedGroups.filter((g) => statusOf(g) === "not_sent").length,
-    sent: searchedGroups.filter((g) => statusOf(g) === "sent").length,
-    opened: searchedGroups.filter((g) => statusOf(g) === "opened").length,
-  };
-  const visibleGroups = filter === "all" ? searchedGroups : searchedGroups.filter((g) => statusOf(g) === filter);
+  const sideOf = (g: GuestGroup) => g.primaryGuest.guest_side ?? null;
+  const matchesDelivery = (g: GuestGroup, f: InviteFilter) => f === "all" || statusOf(g) === f;
 
-  const dashboardHref = (nextFilter: InviteFilter) => {
+  const sidedGroups = searchedGroups.filter((g) => matchesSideFilter(sideOf(g), sideFilter));
+  const deliveryCounts = Object.fromEntries(
+    DELIVERY_TABS.map((t) => [t.value, sidedGroups.filter((g) => matchesDelivery(g, t.value)).length])
+  ) as Record<InviteFilter, number>;
+
+  const deliveredGroups = searchedGroups.filter((g) => matchesDelivery(g, filter));
+  const sideCounts = Object.fromEntries(
+    SIDE_TABS.map((t) => [t.value, deliveredGroups.filter((g) => matchesSideFilter(sideOf(g), t.value)).length])
+  ) as Record<SideFilter, number>;
+
+  const visibleGroups = sidedGroups.filter((g) => matchesDelivery(g, filter));
+
+  // People (not invitations) per side, for the summary line.
+  const peopleBySide = {
+    groom: guestList.filter((g) => g.guest_side === "groom").length,
+    bride: guestList.filter((g) => g.guest_side === "bride").length,
+  };
+  const peopleWithoutSide = totalPeople - peopleBySide.groom - peopleBySide.bride;
+
+  const dashboardHref = (next: { filter?: InviteFilter; side?: SideFilter; q?: string }) => {
+    const nextFilter = next.filter ?? filter;
+    const nextSide = next.side ?? sideFilter;
+    const nextQuery = next.q ?? query;
     const params = new URLSearchParams();
+    if (nextSide !== "all") params.set("side", nextSide);
     if (nextFilter !== "all") params.set("filter", nextFilter);
-    if (query) params.set("q", query);
+    if (nextQuery) params.set("q", nextQuery);
     const qs = params.toString();
     return `/admin/events/${weddingId}/dashboard${qs ? `?${qs}` : ""}`;
   };
@@ -245,7 +266,7 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
             return (
               <Link
                 key={tab.value}
-                href={dashboardHref(tab.value)}
+                href={dashboardHref({ filter: tab.value })}
                 aria-current={active ? "page" : undefined}
                 scroll={false}
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm border transition-all ${
@@ -266,6 +287,42 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
         <div className="order-1 lg:order-2">
           <GuestSearch />
         </div>
+        </div>
+      )}
+
+      {/* Side filter (bride's / groom's side) */}
+      {guestGroups.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 -mt-2">
+          <nav aria-label="Filter by guest side" className="flex flex-wrap gap-2">
+            {SIDE_TABS.map((tab) => {
+              const active = sideFilter === tab.value;
+              const label = tab.value === "groom" || tab.value === "bride" ? sideLabel(tab.value, wedding) : tab.label;
+              return (
+                <Link
+                  key={tab.value}
+                  href={dashboardHref({ side: tab.value })}
+                  aria-current={active ? "page" : undefined}
+                  scroll={false}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
+                    active
+                      ? tab.activeClasses
+                      : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+                  }`}
+                >
+                  <span aria-hidden>{tab.icon}</span>
+                  {label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
+                    {sideCounts[tab.value]}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+          <p className="text-xs text-admin-text-muted">
+            People: <span className="text-sky-400 font-medium">{peopleBySide.groom}</span> groom&apos;s side ·{" "}
+            <span className="text-pink-400 font-medium">{peopleBySide.bride}</span> bride&apos;s side
+            {peopleWithoutSide > 0 && <> · {peopleWithoutSide} not set</>}
+          </p>
         </div>
       )}
 
@@ -301,17 +358,17 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
         </div>
       ) : visibleGroups.length === 0 ? (
         <div className="glass-dark rounded-2xl p-12 text-center">
-          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query ? "🎉" : "🔍"}</div>
+          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" ? "🎉" : "🔍"}</div>
           <p className="text-admin-text-muted text-sm">
             {query
-              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" ? " in this filter" : ""}.</>
-              : filter === "not_sent"
+              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" ? " in this filter" : ""}.</>
+              : filter === "not_sent" && sideFilter === "all"
                 ? "Every invitation has been sent."
                 : "No invitations match this filter."}
           </p>
           {query && (
             <Link
-              href={`/admin/events/${weddingId}/dashboard${filter !== "all" ? `?filter=${filter}` : ""}`}
+              href={dashboardHref({ q: "" })}
               scroll={false}
               className="inline-block mt-4 text-sm text-admin-accent hover:underline"
             >
@@ -332,6 +389,9 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
                     </th>
                     <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
                       Type
+                    </th>
+                    <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                      Side
                     </th>
                     <th className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
                       RSVP Status
@@ -384,6 +444,9 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
                       </td>
                       <td className="px-6 py-4">
                         <TypeBadge type={group.type} count={group.members.length} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <SideBadge side={sideOf(group)} wedding={wedding} />
                       </td>
                       <td className="px-6 py-4">
                         {group.type === "individual" ? (
@@ -441,6 +504,11 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
                       </div>
                       <TypeBadge type={group.type} count={group.members.length} />
                     </div>
+                    {group.primaryGuest.guest_side && (
+                      <div className="mb-1">
+                        <SideBadge side={group.primaryGuest.guest_side} wedding={wedding} />
+                      </div>
+                    )}
                     {group.type !== "individual" && (
                       <div className="text-xs text-admin-text-muted space-y-0.5 mt-1">
                         {group.members.map((m) => (
@@ -507,6 +575,13 @@ const DELIVERY_TABS: { value: InviteFilter; label: string; icon: string }[] = [
   { value: "opened", label: "Opened", icon: "👀" },
 ];
 
+const SIDE_TABS: { value: SideFilter; label: string; icon: string; activeClasses: string }[] = [
+  { value: "all", label: "All sides", icon: "💞", activeClasses: "border-admin-accent bg-admin-accent/10 text-admin-accent" },
+  { value: "groom", label: "Groom's side", icon: "🤵", activeClasses: "border-sky-500 bg-sky-500/10 text-sky-400" },
+  { value: "bride", label: "Bride's side", icon: "👰", activeClasses: "border-pink-500 bg-pink-500/10 text-pink-400" },
+  { value: "unassigned", label: "Not set", icon: "➖", activeClasses: "border-admin-accent bg-admin-accent/10 text-admin-accent" },
+];
+
 // ---------- Sub-components ----------
 
 function StatCard({
@@ -565,6 +640,33 @@ function TypeBadge({ type, count }: { type: string; count: number }) {
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-medium border ${classes}`}
     >
       <span className="text-xs">{icon}</span> {label}
+    </span>
+  );
+}
+
+function SideBadge({
+  side,
+  wedding,
+}: {
+  side: GuestSide | null;
+  wedding: Pick<Wedding, "groom_name" | "bride_name">;
+}) {
+  if (!side) {
+    return <span className="text-xs text-admin-text-muted/60">Not set</span>;
+  }
+
+  const config: Record<GuestSide, { icon: string; classes: string }> = {
+    groom: { icon: "🤵", classes: "bg-sky-500/10 text-sky-400 border-sky-500/20" },
+    bride: { icon: "👰", classes: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
+  };
+  const { icon, classes } = config[side];
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-medium border whitespace-nowrap ${classes}`}
+      title={side === "groom" ? "Groom's side" : "Bride's side"}
+    >
+      <span className="text-xs" aria-hidden>{icon}</span> {sideLabel(side, wedding)}
     </span>
   );
 }

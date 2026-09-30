@@ -123,8 +123,8 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
     if (stage.kind !== "done") return;
     const origin = window.location.origin;
     const csv = toCsv([
-      ["Type", "Name", "Members", "Phone", "Invite Link"],
-      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), c.phone ?? "", `${origin}/invite/${c.code}`]),
+      ["Type", "Name", "Members", "Phone", "Side", "Invite Link"],
+      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), c.phone ?? "", c.side ?? "", `${origin}/invite/${c.code}`]),
     ]);
     // BOM so Excel opens UTF-8 names (Sinhala/Tamil etc.) correctly.
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -292,6 +292,7 @@ function FormatGuide() {
             <tr><td className="py-2 pr-4 font-mono">Name</td><td className="py-2 pr-4 text-admin-text-muted">Yes*</td><td className="py-2">Shown as &quot;Dear …&quot;. e.g. <em>Sarah Johnson</em>, <em>Mr. &amp; Mrs. Fernando</em>, <em>The Silva Family</em>. *Optional for couples — defaults to &quot;A &amp; B&quot;.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Members</td><td className="py-2 pr-4 text-admin-text-muted">Couple/Family</td><td className="py-2">Each person who can RSVP, separated by <code>;</code> (or one per line inside the cell). Couple = exactly 2, Family = 2 or more. Leave blank for individuals.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Phone</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">WhatsApp number, e.g. <code>0771234567</code> or <code>+94771234567</code>. Numbers without a country code get <code>+{DEFAULT_COUNTRY_CODE}</code>. One number per invitation.</td></tr>
+            <tr><td className="py-2 pr-4 font-mono">Side</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2"><code>groom</code> or <code>bride</code> — whose side invited them. Leave blank to decide later.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Message</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">Optional personal note on the invitation.</td></tr>
           </tbody>
         </table>
@@ -375,6 +376,7 @@ function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCan
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Members</th>
                   <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Side</th>
                   <th className="px-4 py-3">Message</th>
                 </tr>
               </thead>
@@ -386,6 +388,7 @@ function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCan
                     <td className="px-4 py-2.5 text-admin-text">{inv.name}</td>
                     <td className="px-4 py-2.5 text-admin-text-muted">{inv.members.join(", ") || "—"}</td>
                     <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap">{inv.phone || "—"}</td>
+                    <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap capitalize">{inv.side || "—"}</td>
                     <td className="px-4 py-2.5 text-admin-text-muted max-w-60 truncate">{inv.message || "—"}</td>
                   </tr>
                 ))}
