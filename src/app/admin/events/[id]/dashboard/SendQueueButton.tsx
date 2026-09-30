@@ -7,6 +7,7 @@ import type { Wedding } from "@/lib/supabase";
 import { markInviteSent } from "@/lib/actions";
 import { buildWhatsAppInvite } from "@/lib/whatsapp";
 import AdminModal from "@/components/admin/AdminModal";
+import { matchesSideFilter, sideLabel, SIDE_FILTERS, type GuestSide, type SideFilter } from "@/lib/guest-side";
 
 export interface QueueItem {
   guestId: string;
@@ -14,6 +15,7 @@ export interface QueueItem {
   type: "individual" | "couple" | "family";
   members: string[];
   phone: string | null;
+  side: GuestSide | null;
   code: string;
 }
 
@@ -21,12 +23,22 @@ interface SendQueueButtonProps {
   wedding: Partial<Wedding>;
   /** Invitations not sent yet (and not opened), in dashboard order. */
   items: QueueItem[];
+  /** Side pre-selected in the picker — the dashboard's current side filter. */
+  initialSide?: SideFilter;
 }
 
-export default function SendQueueButton({ wedding, items }: SendQueueButtonProps) {
+export default function SendQueueButton({ wedding, items, initialSide = "all" }: SendQueueButtonProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // null = still choosing. Skip the picker when no guest has a side — there'd be nothing to choose.
+  const hasSides = items.some((i) => i.side);
+  const [side, setSide] = useState<SideFilter | null>(null);
   const router = useRouter();
+
+  const openModal = () => {
+    setSide(hasSides ? null : "all");
+    setOpen(true);
+  };
 
   const close = () => {
     setOpen(false);
@@ -37,7 +49,7 @@ export default function SendQueueButton({ wedding, items }: SendQueueButtonProps
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openModal}
         disabled={items.length === 0}
         aria-haspopup="dialog"
         title={items.length === 0 ? "Every invitation has been sent" : undefined}
@@ -53,11 +65,101 @@ export default function SendQueueButton({ wedding, items }: SendQueueButtonProps
         busy={busy}
         maxWidth="max-w-xl"
         title="Send Invitations on WhatsApp"
-        description="Go through each unsent invitation: open WhatsApp, press send, then confirm here."
+        description={
+          side === null
+            ? "Choose whose guests to send to, then go through each unsent invitation."
+            : "Go through each unsent invitation: open WhatsApp, press send, then confirm here."
+        }
       >
-        <SendQueue wedding={wedding} items={items} onBusyChange={setBusy} onDone={close} />
+        {side === null ? (
+          <SidePicker wedding={wedding} items={items} initialSide={initialSide} onStart={setSide} />
+        ) : (
+          <SendQueue
+            wedding={wedding}
+            items={items.filter((i) => matchesSideFilter(i.side, side))}
+            onBusyChange={setBusy}
+            onDone={close}
+          />
+        )}
       </AdminModal>
     </>
+  );
+}
+
+// ────────────────────────── Side picker ──────────────────────────
+
+const SIDE_OPTIONS: Record<SideFilter, { icon: string; label: string; activeClasses: string }> = {
+  all: { icon: "💞", label: "Everyone", activeClasses: "border-admin-accent bg-admin-accent/10" },
+  groom: { icon: "🤵", label: "Groom's side", activeClasses: "border-sky-500 bg-sky-500/10" },
+  bride: { icon: "👰", label: "Bride's side", activeClasses: "border-pink-500 bg-pink-500/10" },
+  unassigned: { icon: "➖", label: "Side not set", activeClasses: "border-admin-accent bg-admin-accent/10" },
+};
+
+function SidePicker({
+  wedding,
+  items,
+  initialSide,
+  onStart,
+}: {
+  wedding: Partial<Wedding>;
+  items: QueueItem[];
+  initialSide: SideFilter;
+  onStart: (side: SideFilter) => void;
+}) {
+  const counts = Object.fromEntries(
+    SIDE_FILTERS.map((f) => [f, items.filter((i) => matchesSideFilter(i.side, f)).length])
+  ) as Record<SideFilter, number>;
+  // Hide "not set" when every guest has a side.
+  const options = SIDE_FILTERS.filter((f) => f !== "unassigned" || counts.unassigned > 0);
+  const [selected, setSelected] = useState<SideFilter>(counts[initialSide] > 0 ? initialSide : "all");
+
+  return (
+    <div className="space-y-5">
+      <fieldset>
+        <legend className="text-sm font-medium text-admin-text-muted mb-3">Send invitations to</legend>
+        <div role="radiogroup" aria-label="Guest side" className="grid grid-cols-2 gap-3">
+          {options.map((value) => {
+            const opt = SIDE_OPTIONS[value];
+            const active = selected === value;
+            const empty = counts[value] === 0;
+            const name = value === "groom" || value === "bride" ? sideLabel(value, wedding) : null;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={empty}
+                onClick={() => setSelected(value)}
+                className={`flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                  active ? opt.activeClasses : "border-admin-border hover:border-admin-accent/40 hover:bg-admin-border/10"
+                }`}
+              >
+                <span className="text-2xl" aria-hidden>{opt.icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-admin-text">{opt.label}</span>
+                  <span className="block text-xs text-admin-text-muted truncate">
+                    {name && name !== opt.label ? `${name} · ` : ""}
+                    {counts[value]} unsent
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <button
+        type="button"
+        onClick={() => onStart(selected)}
+        disabled={counts[selected] === 0}
+        autoFocus
+        className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+      >
+        <WhatsAppIcon className="w-5 h-5" />
+        Start sending ({counts[selected]})
+      </button>
+    </div>
   );
 }
 
@@ -164,7 +266,15 @@ function SendQueue({
       {/* Guest card */}
       <div key={current.guestId} className="glass-dark rounded-2xl p-5 space-y-3 animate-fade-in-up">
         <div>
-          <p className="text-xs uppercase tracking-wider text-admin-text-muted">{current.type}</p>
+          <p className="text-xs uppercase tracking-wider text-admin-text-muted">
+            {current.type}
+            {current.side && (
+              <span className={current.side === "groom" ? "text-sky-400" : "text-pink-400"}>
+                {" · "}
+                {sideLabel(current.side, wedding)}
+              </span>
+            )}
+          </p>
           <h3 className="text-xl font-semibold text-admin-text">{current.label}</h3>
           {current.members.length > 1 && (
             <p className="text-sm text-admin-text-muted mt-0.5">{current.members.join(", ")}</p>

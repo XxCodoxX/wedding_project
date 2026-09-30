@@ -176,6 +176,7 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
       type: g.type,
       members: g.members.map((m) => m.guest_name),
       phone: g.primaryGuest.phone ?? null,
+      side: sideOf(g),
       code: g.inviteCode,
     }));
 
@@ -200,7 +201,7 @@ export default async function DashboardPage({ params, searchParams }: PageProps)
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <SendQueueButton wedding={wedding} items={sendQueue} />
+          <SendQueueButton wedding={wedding} items={sendQueue} initialSide={sideFilter} />
           <ImportGuestsButton
             weddingId={weddingId}
             wedding={wedding}
