@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createAuthServerClient } from "@/lib/supabase-auth";
 import { createServerClient } from "@/lib/supabase";
 
@@ -28,8 +29,9 @@ export async function getAuthUser() {
 /**
  * Get the current user's profile including role and assigned wedding.
  * Returns null if not authenticated or no profile exists.
+ * Memoized per request (React `cache`), so layout + page + access checks share one Auth/DB lookup.
  */
-export async function getUserProfile(): Promise<UserProfile | null> {
+export const getUserProfile = cache(async function getUserProfile(): Promise<UserProfile | null> {
   const user = await getAuthUser();
   if (!user) return null;
 
@@ -64,7 +66,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
   }
 
   return null;
-}
+});
 
 /**
  * Check if the current user is an admin.

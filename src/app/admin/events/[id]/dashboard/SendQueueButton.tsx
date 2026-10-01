@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import type { Wedding } from "@/lib/supabase";
 import { markInviteSent } from "@/lib/actions";
 import { buildWhatsAppInvite } from "@/lib/whatsapp";
 import AdminModal from "@/components/admin/AdminModal";
-import { matchesSideFilter, sideLabel, SIDE_FILTERS, type GuestSide, type SideFilter } from "@/lib/guest-side";
+import { matchesSideFilter, parseSideFilter, sideLabel, SIDE_FILTERS, type GuestSide, type SideFilter } from "@/lib/guest-side";
 
 export interface QueueItem {
   guestId: string;
@@ -23,11 +23,11 @@ interface SendQueueButtonProps {
   wedding: Partial<Wedding>;
   /** Invitations not sent yet (and not opened), in dashboard order. */
   items: QueueItem[];
-  /** Side pre-selected in the picker — the dashboard's current side filter. */
-  initialSide?: SideFilter;
 }
 
-export default function SendQueueButton({ wedding, items, initialSide = "all" }: SendQueueButtonProps) {
+export default function SendQueueButton({ wedding, items }: SendQueueButtonProps) {
+  // Pre-select the dashboard's current side filter (read live — filters change client-side).
+  const initialSide = parseSideFilter(useSearchParams().get("side") ?? undefined);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // null = still choosing. Skip the picker when no guest has a side — there'd be nothing to choose.

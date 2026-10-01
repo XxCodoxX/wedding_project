@@ -1,23 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { MAX_SEARCH_LENGTH } from "@/lib/guest-search";
 
 const DEBOUNCE_MS = 300;
 
 /**
- * Search box for the guest table. Writes the query to the URL (?q=…) so the server
- * filters the table, the delivery-filter tabs keep it, and live refreshes preserve it.
+ * Search box for the guest table. Writes the query to the URL (?q=…) so GuestTable
+ * filters client-side, the filter tabs keep it, and live refreshes preserve it.
+ * Uses history.replaceState (synced into useSearchParams by Next.js) — no server round trip.
  */
 export default function GuestSearch() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
 
   const [value, setValue] = useState(urlQuery);
-  const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,9 +40,7 @@ export default function GuestSearch() {
     if (trimmed) params.set("q", trimmed);
     else params.delete("q");
     const qs = params.toString();
-    startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    });
+    window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
   };
 
   const onChange = (next: string) => {
@@ -99,12 +96,6 @@ export default function GuestSearch() {
         className="w-full pl-10 pr-16 py-2.5 rounded-xl bg-admin-bg border border-admin-border text-sm text-admin-text placeholder-admin-text-muted/50 focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all [&::-webkit-search-cancel-button]:hidden"
       />
       <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-        {isPending && (
-          <svg className="animate-spin h-3.5 w-3.5 text-admin-text-muted" viewBox="0 0 24 24" aria-label="Searching">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        )}
         {value ? (
           <button
             type="button"
