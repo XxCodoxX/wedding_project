@@ -8,6 +8,7 @@ import DeleteGuestButton from "./DeleteGuestButton";
 import CopyLinkButtonClient from "./CopyLinkButtonClient";
 import InviteStatusCell from "./InviteStatusCell";
 import GuestSearch from "./GuestSearch";
+import RsvpControl from "./RsvpControl";
 import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
@@ -401,11 +402,7 @@ function MemberList({ members }: { members: Guest[] }) {
 }
 
 function GroupRsvp({ group }: { group: GuestGroup }) {
-  return group.type === "individual" ? (
-    <RsvpBadge status={group.primaryGuest.rsvp_status} />
-  ) : (
-    <GroupRsvpSummary members={group.members} />
-  );
+  return <RsvpControl members={group.members} isGroup={group.type !== "individual"} />;
 }
 
 function TypeBadge({ type, count }: { type: string; count: number }) {
@@ -461,60 +458,6 @@ function SideBadge({
       title={side === "groom" ? "Groom's side" : "Bride's side"}
     >
       <span className="text-xs" aria-hidden>{icon}</span> {sideLabel(side, wedding)}
-    </span>
-  );
-}
-
-function RsvpBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; classes: string }> = {
-    pending: {
-      label: "Pending",
-      classes: "bg-admin-warning/15 text-admin-warning border-admin-warning/25",
-    },
-    attending: {
-      label: "Attending",
-      classes: "bg-admin-success/15 text-admin-success border-admin-success/25",
-    },
-    not_attending: {
-      label: "Not Attending",
-      classes: "bg-admin-danger/15 text-admin-danger border-admin-danger/25",
-    },
-  };
-
-  const { label, classes } = config[status] || config.pending;
-
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${classes}`}>
-      {label}
-    </span>
-  );
-}
-
-function GroupRsvpSummary({ members }: { members: Guest[] }) {
-  const attending = members.filter((m) => m.rsvp_status === "attending").length;
-  const total = members.length;
-  const allPending = members.every((m) => m.rsvp_status === "pending");
-  const allAttending = attending === total;
-
-  if (allPending) {
-    return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border bg-admin-warning/15 text-admin-warning border-admin-warning/25">
-        Pending ({total})
-      </span>
-    );
-  }
-
-  if (allAttending) {
-    return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border bg-admin-success/15 text-admin-success border-admin-success/25">
-        All Attending ({total})
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border bg-admin-accent/15 text-admin-accent border-admin-accent/25">
-      {attending}/{total} Attending
     </span>
   );
 }

@@ -3,6 +3,7 @@
 import { createServerClient, type Guest } from "@/lib/supabase";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { encryptGuestId } from "@/lib/crypto";
 import { normalizePhone, isMissingPhoneColumn, PHONE_MIGRATION_ERROR } from "@/lib/phone";
 import { isMissingTrackingColumn, TRACKING_MIGRATION_ERROR } from "@/lib/invite-tracking";
@@ -760,6 +761,54 @@ export async function markInviteSent(guestId: string, sent: boolean) {
     return { success: true, sentAt };
   } catch (e) {
     console.error("markInviteSent failed:", e);
+    return { error: "An unexpected error occurred" };
+  }
+}
+
+// ---------- Manual RSVP ----------
+
+const setRsvpSchema = z.object({
+  guestIds: z.array(z.uuid()).min(1).max(100),
+  status: z.enum(["attending", "not_attending", "pending"]),
+});
+
+/**
+ * Admin override of RSVP status — for guests who replied by phone/in person, or to reset a reply.
+ * Takes one or more guests (e.g. a whole family) that must all belong to the same event.
+ */
+export async function setRsvpStatus(guestIds: string[], status: Guest["rsvp_status"]) {
+  const parsed = setRsvpSchema.safeParse({ guestIds, status });
+  if (!parsed.success) return { error: "Invalid RSVP update" };
+  const ids = [...new Set(parsed.data.guestIds)];
+
+  try {
+    const supabase = createServerClient();
+    const { data: guests, error: fetchError } = await supabase
+      .from("guests")
+      .select("id, wedding_id")
+      .in("id", ids);
+
+    if (fetchError) return { error: `Failed to load guests: ${fetchError.message}` };
+    if (!guests || guests.length !== ids.length) return { error: "Guest not found" };
+
+    const weddingIds = new Set(guests.map((g) => g.wedding_id));
+    if (weddingIds.size !== 1) return { error: "Guests must belong to the same event" };
+    const [weddingId] = weddingIds;
+    if (!(await canAccessWedding(weddingId))) {
+      return { error: "Unauthorized: You don't have access to this event" };
+    }
+
+    const { error } = await supabase
+      .from("guests")
+      .update({ rsvp_status: parsed.data.status })
+      .in("id", ids)
+      .eq("wedding_id", weddingId);
+    if (error) return { error: `Failed to update RSVP: ${error.message}` };
+
+    revalidatePath(`/admin/events/${weddingId}/dashboard`);
+    return { success: true };
+  } catch (e) {
+    console.error("setRsvpStatus failed:", e);
     return { error: "An unexpected error occurred" };
   }
 }
