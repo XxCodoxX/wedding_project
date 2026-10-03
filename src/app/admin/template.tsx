@@ -1,21 +1,4 @@
-"use client";
-
-import { motion } from "framer-motion";
-import { usePathname } from "next/navigation";
-
+// A template remounts on every navigation, so the CSS animation replays per page.
 export default function AdminTemplate({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  return (
-    <motion.div
-      key={pathname}
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="w-full h-full"
-    >
-      {children}
-    </motion.div>
-  );
+  return <div className="animate-page-in w-full h-full">{children}</div>;
 }

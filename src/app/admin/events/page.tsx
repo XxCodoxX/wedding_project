@@ -8,12 +8,11 @@ import DeleteEventButton from "./DeleteEventButton";
 export const dynamic = "force-dynamic";
 
 export default async function EventsPage() {
-  const user = await getAuthUser();
+  // Both are request-memoized, so this is one auth check + one profile query shared with the layout.
+  const [user, profile] = await Promise.all([getAuthUser(), getUserProfile()]);
   if (!user) {
     redirect("/admin/login");
   }
-
-  const profile = await getUserProfile();
 
   if (!profile) {
     return (

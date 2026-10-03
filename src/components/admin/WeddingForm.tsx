@@ -1,14 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import TemplatePreviewModal from "./TemplatePreviewModal";
 import PhotoUploader from "./PhotoUploader";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import { TEMPLATE_REGISTRY, TemplateDefinition } from "@/templates/registry";
 import type { AgendaItem } from "@/lib/supabase";
 import { DEFAULT_WHATSAPP_TEMPLATE, TEMPLATE_PLACEHOLDERS, formatWhatsAppMessage } from "@/lib/whatsapp";
+
+// Lazy-load: the preview pulls in the invitation templates, which only download when it's opened.
+const TemplatePreviewModal = dynamic(() => import("./TemplatePreviewModal"), { ssr: false });
 
 const DEFAULT_AGENDA: AgendaItem[] = [
   {

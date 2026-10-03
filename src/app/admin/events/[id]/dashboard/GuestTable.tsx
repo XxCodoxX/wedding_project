@@ -295,6 +295,7 @@ const GuestRow = memo(function GuestRow({ group, wedding, weddingId }: RowProps)
         {group.primaryGuest.custom_message && group.type === "individual" && (
           <div className="text-xs text-admin-text-muted truncate max-w-50">{group.primaryGuest.custom_message}</div>
         )}
+        <RsvpWish group={group} className="max-w-64" />
       </td>
       <td className="px-6 py-4">
         <TypeBadge type={group.type} count={group.members.length} />
@@ -342,6 +343,7 @@ const GuestCard = memo(function GuestCard({ group, wedding, weddingId }: RowProp
               <MemberList members={group.members} />
             </div>
           )}
+          <RsvpWish group={group} />
         </div>
         <GroupRsvp group={group} />
       </div>
@@ -375,7 +377,7 @@ function RowActions({ group, weddingId }: { group: GuestGroup; weddingId: string
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
         </svg>
       </Link>
-      <DeleteGuestButton guestId={group.primaryGuest.id} guestName={group.label} weddingId={weddingId} />
+      <DeleteGuestButton guestId={group.primaryGuest.id} guestName={group.label} />
     </>
   );
 }
@@ -398,6 +400,25 @@ function MemberList({ members }: { members: Guest[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** The wishes the guest wrote with their RSVP (a group shares one message). */
+function RsvpWish({ group, className = "" }: { group: GuestGroup; className?: string }) {
+  const message = group.members.find((m) => m.rsvp_message)?.rsvp_message;
+  if (!message) return null;
+
+  return (
+    <blockquote
+      title={message}
+      className={`mt-1.5 flex gap-1.5 text-xs italic text-admin-text-muted ${className}`}
+    >
+      <span aria-hidden className="not-italic">💌</span>
+      <span className="line-clamp-2 break-words">
+        <span className="sr-only">RSVP message: </span>
+        {message}
+      </span>
+    </blockquote>
   );
 }
 

@@ -1,13 +1,15 @@
-import ClassicTemplate from "./ClassicTemplate";
-import MinimalTemplate from "./MinimalTemplate";
-import OrnateTemplate from "./OrnateTemplate";
 import type { Wedding, Guest } from "@/lib/supabase";
+
+// Metadata only. The template components live in ./components so that admin screens
+// importing this list (forms, grids) don't bundle every invitation design.
 
 export interface TemplateProps {
   wedding: Wedding;
   guest?: Guest;
   groupMembers?: Guest[];
   isPreview?: boolean;
+  /** Encrypted invite code from the URL; the RSVP API uses it to authorise the response. Absent in previews. */
+  inviteCode?: string;
 }
 
 export interface TemplateDefinition {
@@ -16,7 +18,6 @@ export interface TemplateDefinition {
   description: string;
   requiresMainImage: boolean;
   requiresGallery: boolean;
-  component: React.FC<TemplateProps>;
 }
 
 export const TEMPLATE_REGISTRY: TemplateDefinition[] = [
@@ -26,7 +27,6 @@ export const TEMPLATE_REGISTRY: TemplateDefinition[] = [
     description: "A traditional, elegant design with floral accents.",
     requiresMainImage: true,
     requiresGallery: true,
-    component: ClassicTemplate,
   },
   {
     id: "minimal",
@@ -34,7 +34,6 @@ export const TEMPLATE_REGISTRY: TemplateDefinition[] = [
     description: "A clean, typography-focused design without gallery clutter.",
     requiresMainImage: true,
     requiresGallery: false,
-    component: MinimalTemplate,
   },
   {
     id: "ornate",
@@ -42,7 +41,6 @@ export const TEMPLATE_REGISTRY: TemplateDefinition[] = [
     description: "A premium white-and-gold design with a rotating mandala ornament intro screen.",
     requiresMainImage: false,
     requiresGallery: false,
-    component: OrnateTemplate,
   },
 ];
 

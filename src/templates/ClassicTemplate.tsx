@@ -6,7 +6,7 @@ import EventDetails from "@/components/invite/EventDetails";
 import Footer from "@/components/invite/Footer";
 import { TemplateProps } from "./registry";
 
-export default function ClassicTemplate({ wedding, guest, groupMembers, isPreview }: TemplateProps) {
+export default function ClassicTemplate({ wedding, guest, groupMembers, isPreview, inviteCode }: TemplateProps) {
   const guestCustomMsg =
     guest?.custom_message && guest.custom_message.trim() !== guest?.guest_name?.trim()
       ? guest.custom_message.trim()
@@ -56,6 +56,7 @@ export default function ClassicTemplate({ wedding, guest, groupMembers, isPrevie
           guestId={guest?.id || "mock-guest-id"}
           guestName={guest?.guest_name || "John Doe"}
           currentStatus={guest?.rsvp_status || "pending"}
+          inviteCode={inviteCode}
           groupMembers={
             groupMembers && groupMembers.length > 1
               ? groupMembers.map((m) => ({

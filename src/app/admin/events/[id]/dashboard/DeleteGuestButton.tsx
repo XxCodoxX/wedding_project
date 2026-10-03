@@ -7,11 +7,9 @@ import { deleteGuest } from "@/lib/actions";
 export default function DeleteGuestButton({
   guestId,
   guestName,
-  weddingId,
 }: {
   guestId: string;
   guestName: string;
-  weddingId?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -19,7 +17,7 @@ export default function DeleteGuestButton({
 
   const handleDelete = async () => {
     setDeleting(true);
-    const result = await deleteGuest(guestId, weddingId);
+    const result = await deleteGuest(guestId);
     if (result.error) {
       alert(`Failed to delete: ${result.error}`);
       setDeleting(false);

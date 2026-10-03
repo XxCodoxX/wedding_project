@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import InviteLinkDisplay from "./InviteLinkDisplay";
@@ -62,6 +62,10 @@ export default function GuestForm({
   const phoneCheck = normalizePhone(phone);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // router.push() returns immediately; the transition stays pending until the
+  // dashboard's server render arrives, so the overlay covers that gap too.
+  const [isNavigating, startNavigation] = useTransition();
+  const busy = loading || isNavigating;
   const [savedInviteCode, setSavedInviteCode] = useState(inviteCode || "");
   const router = useRouter();
 
@@ -137,11 +141,9 @@ export default function GuestForm({
             ? "Invitation created successfully!"
             : "Invitation updated successfully!"
         );
-        if (weddingId) {
-          router.push(`/admin/events/${weddingId}/dashboard`);
-        } else {
-          router.push("/admin/guests");
-        }
+        startNavigation(() => {
+          router.push(weddingId ? `/admin/events/${weddingId}/dashboard` : "/admin/guests");
+        });
       }
     } catch {
       const errorMsg = "An unexpected error occurred";
@@ -187,7 +189,7 @@ export default function GuestForm({
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6 relative overflow-hidden rounded-2xl">
         <SectionLoadingOverlay
-          isLoading={loading}
+          isLoading={busy}
           message={mode === "create" ? "Creating Invitation..." : "Saving Changes..."}
           submessage={
             mode === "create"
@@ -475,10 +477,10 @@ export default function GuestForm({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={loading}
+            disabled={busy}
             className="px-6 py-3 rounded-xl bg-admin-accent text-white font-medium hover:bg-admin-accent-light focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:ring-offset-2 focus:ring-offset-admin-bg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
           >
-            {loading ? (
+            {busy ? (
               <span className="inline-flex items-center gap-2">
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />

@@ -42,6 +42,8 @@ export interface Guest {
   invite_last_opened_at?: string | null;
   invite_open_count?: number;
   rsvp_status: "pending" | "attending" | "not_attending";
+  /** Wishes the guest wrote with their RSVP. Undefined until migration 16 is run. */
+  rsvp_message?: string | null;
   created_at: string;
 }
 

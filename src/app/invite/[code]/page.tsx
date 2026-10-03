@@ -1,10 +1,10 @@
 import { Metadata } from "next";
+import { cache } from "react";
 import { decryptGuestId } from "@/lib/crypto";
 import { createServerClient } from "@/lib/supabase";
 import type { Guest, Wedding } from "@/lib/supabase";
-import { getTemplateById } from "@/templates/registry";
+import { TEMPLATE_COMPONENTS } from "@/templates/components";
 import Image from "next/image";
-import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { cookies, headers } from "next/headers";
 import { hasAdminSessionCookie, isLinkPreviewBot, isPrefetchRequest } from "@/lib/invite-tracking";
@@ -12,6 +12,45 @@ import { hasAdminSessionCookie, isLinkPreviewBot, isPrefetchRequest } from "@/li
 interface PageProps {
   params: Promise<{ code: string }>;
 }
+
+interface InviteData {
+  guest: Guest;
+  wedding: Wedding;
+  groupMembers: Guest[];
+}
+
+/**
+ * Load the guest, their wedding and (for couples/families) the group members.
+ * Memoized per request, so generateMetadata and the page share one set of queries.
+ */
+const getInvite = cache(async function getInvite(guestId: string): Promise<InviteData | null> {
+  const supabase = createServerClient();
+  const { data: guest, error } = await supabase
+    .from("guests")
+    .select("*, weddings(*)")
+    .eq("id", guestId)
+    .single();
+
+  if (error || !guest || !guest.weddings) return null;
+
+  const rawWeddings = (guest as { weddings: Wedding | Wedding[] }).weddings;
+  const wedding = Array.isArray(rawWeddings) ? rawWeddings[0] : rawWeddings;
+  if (!wedding) return null;
+
+  const typedGuest = guest as Guest;
+  let groupMembers: Guest[] = [];
+  if (typedGuest.group_id) {
+    const { data: members } = await supabase
+      .from("guests")
+      .select("*")
+      .eq("group_id", typedGuest.group_id)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: true });
+    groupMembers = (members as Guest[]) || [];
+  }
+
+  return { guest: typedGuest, wedding, groupMembers };
+});
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code } = await params;
@@ -24,18 +63,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   try {
-    const supabase = createServerClient();
-    const { data: guest } = await supabase
-      .from("guests")
-      .select("guest_name, group_label, weddings(groom_name, bride_name, wedding_date, venue_name, main_image_url)")
-      .eq("id", guestId)
-      .single();
-
-    if (guest && guest.weddings) {
-      const rawWedding = (guest as any).weddings;
-      const wedding = Array.isArray(rawWedding) ? rawWedding[0] : rawWedding;
+    const invite = await getInvite(guestId);
+    if (invite) {
+      const { guest, wedding } = invite;
       const couple =
-        wedding?.groom_name && wedding?.bride_name
+        wedding.groom_name && wedding.bride_name
           ? `${wedding.groom_name} & ${wedding.bride_name}`
           : "Wedding Invitation";
       const guestName = guest.group_label || guest.guest_name;
@@ -43,7 +75,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       const description = `We warmly invite you to join us in celebrating our wedding. Please click to view your invitation and RSVP.`;
       // Couple's cover photo if set, otherwise the branded card. Never leave this empty:
       // page-level openGraph replaces the layout's, and WhatsApp then falls back to the favicon.
-      const imageUrl: string = wedding?.main_image_url || "/default-og.png";
+      const imageUrl: string = wedding.main_image_url || "/default-og.png";
 
       return {
         title,
@@ -82,45 +114,16 @@ export default async function InvitePage({ params }: PageProps) {
     return <NotFoundPage />;
   }
 
-  // Fetch guest and their associated wedding from database
-  const supabase = createServerClient();
-  const { data: guest, error } = await supabase
-    .from("guests")
-    .select("*, weddings(*)")
-    .eq("id", guestId)
-    .single();
-
-  if (error || !guest || !guest.weddings) {
+  const invite = await getInvite(guestId);
+  if (!invite) {
     return <NotFoundPage />;
   }
+  const { guest: typedGuest, wedding, groupMembers } = invite;
 
-  const rawWeddings = (guest as any).weddings;
-  const wedding: Wedding = Array.isArray(rawWeddings) ? rawWeddings[0] : rawWeddings;
-
-  if (!wedding) {
+  const TemplateComponent = TEMPLATE_COMPONENTS[wedding.template_id];
+  if (!TemplateComponent) {
     return <NotFoundPage />;
   }
-
-  const typedGuest = guest as Guest;
-
-  // Fetch group members if this is a couple/family invitation
-  let groupMembers: Guest[] = [];
-  if (typedGuest.group_id) {
-    const { data: members } = await supabase
-      .from("guests")
-      .select("*")
-      .eq("group_id", typedGuest.group_id)
-      .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: true });
-    groupMembers = (members as Guest[]) || [];
-  }
-
-  const templateDefinition = getTemplateById(wedding.template_id);
-  if (!templateDefinition) {
-    return <NotFoundPage />;
-  }
-
-  const TemplateComponent = templateDefinition.component;
 
   // Record the open AFTER the response is sent, so tracking never slows the invitation down.
   // Request data must be read here — Server Components can't read headers/cookies inside after().
@@ -131,6 +134,7 @@ export default async function InvitePage({ params }: PageProps) {
     !hasAdminSessionCookie(requestCookies.getAll().map((c) => c.name));
 
   if (shouldTrack) {
+    const supabase = createServerClient();
     after(async () => {
       const { error: trackError } = await supabase.rpc("record_invite_open", { p_guest_id: typedGuest.id });
       // Missing function (migration 12 not run) must never break the invitation — just log.
@@ -143,6 +147,7 @@ export default async function InvitePage({ params }: PageProps) {
       wedding={wedding}
       guest={typedGuest}
       groupMembers={groupMembers.length > 0 ? groupMembers : undefined}
+      inviteCode={code}
     />
   );
 }

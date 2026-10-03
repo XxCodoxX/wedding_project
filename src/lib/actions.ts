@@ -115,8 +115,10 @@ export async function createWedding(formData: FormData) {
   const formMainImageUrl = (formData.get("main_image_url") as string) || null;
 
   // Handle file uploads
-  const mainImageUrls = await uploadWeddingPhotos(supabase, wedding.id, formData, "main_image");
-  const galleryImageUrls = await uploadWeddingPhotos(supabase, wedding.id, formData, "gallery_images");
+  const [mainImageUrls, galleryImageUrls] = await Promise.all([
+    uploadWeddingPhotos(supabase, wedding.id, formData, "main_image"),
+    uploadWeddingPhotos(supabase, wedding.id, formData, "gallery_images"),
+  ]);
 
   const effectiveMainImageUrl = mainImageUrls.length > 0 ? mainImageUrls[0] : (formMainImageUrl?.trim() || null);
 
@@ -173,19 +175,17 @@ export async function updateWedding(weddingId: string, formData: FormData) {
     return { error: "All required fields must be filled" };
   }
 
-  // Get existing wedding
-  const { data: existing } = await supabase
-    .from("weddings")
-    .select("main_image_url, gallery_image_urls")
-    .eq("id", weddingId)
-    .single();
+  // The existing row, storage deletes and new uploads are independent — run them together.
+  const [{ data: existing }, , , newMainUrls, newGalleryUrls] = await Promise.all([
+    supabase.from("weddings").select("main_image_url, gallery_image_urls").eq("id", weddingId).single(),
+    handleRemovedUrls(supabase, removedMainJson),
+    handleRemovedUrls(supabase, removedGalleryJson),
+    uploadWeddingPhotos(supabase, weddingId, formData, "main_image"),
+    uploadWeddingPhotos(supabase, weddingId, formData, "gallery_images"),
+  ]);
 
   let mainImageUrl = existing?.main_image_url;
   let galleryImageUrls = existing?.gallery_image_urls || [];
-
-  // Remove deleted photos from storage
-  await handleRemovedUrls(supabase, removedMainJson);
-  await handleRemovedUrls(supabase, removedGalleryJson);
 
   if (removedMainJson && JSON.parse(removedMainJson).length > 0) {
     mainImageUrl = null;
@@ -197,10 +197,6 @@ export async function updateWedding(weddingId: string, formData: FormData) {
     const removedUrls = JSON.parse(removedGalleryJson);
     galleryImageUrls = galleryImageUrls.filter((u: string) => !removedUrls.includes(u));
   }
-
-  // Upload new photos
-  const newMainUrls = await uploadWeddingPhotos(supabase, weddingId, formData, "main_image");
-  const newGalleryUrls = await uploadWeddingPhotos(supabase, weddingId, formData, "gallery_images");
 
   if (newMainUrls.length > 0) {
     mainImageUrl = newMainUrls[0];
@@ -554,7 +550,6 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
 export async function updateGuest(guestId: string, formData: FormData) {
   const supabase = createServerClient();
 
-  const weddingId = formData.get("wedding_id") as string;
   const guestName = formData.get("guest_name") as string;
   const customMessage = (formData.get("custom_message") as string) || null;
   const invitationType = (formData.get("invitation_type") as string) || "individual";
@@ -566,22 +561,10 @@ export async function updateGuest(guestId: string, formData: FormData) {
     return { error: phoneResult.error };
   }
 
-  let targetWeddingId = weddingId;
-  if (!targetWeddingId) {
-    const { data: guest } = await supabase
-      .from("guests")
-      .select("wedding_id")
-      .eq("id", guestId)
-      .single();
-    targetWeddingId = guest?.wedding_id;
-  }
-
-  if (targetWeddingId) {
-    const hasAccess = await canAccessWedding(targetWeddingId);
-    if (!hasAccess) {
-      return { error: "Unauthorized: You don't have access to this event" };
-    }
-  }
+  const auth = await authorizeGuest(supabase, guestId);
+  if ("error" in auth) return { error: auth.error };
+  const existing = auth.guest;
+  const targetWeddingId = existing.wedding_id;
 
   if (!guestName?.trim()) {
     return { error: "Guest name is required" };
@@ -589,15 +572,8 @@ export async function updateGuest(guestId: string, formData: FormData) {
 
   // ---------- Individual invitation ----------
   if (invitationType === "individual") {
-    // First, get the existing guest to check if it was previously a group
-    const { data: existing } = await supabase
-      .from("guests")
-      .select("group_id")
-      .eq("id", guestId)
-      .single();
-
     // If converting from group to individual, delete other group members
-    if (existing?.group_id) {
+    if (existing.group_id) {
       await supabase
         .from("guests")
         .delete()
@@ -627,10 +603,8 @@ export async function updateGuest(guestId: string, formData: FormData) {
     const sideError = await saveGuestSide(supabase, { guestId }, guestSide);
     if (sideError) return { error: sideError };
 
-    if (targetWeddingId) {
-      revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
-      revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
-    }
+    revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
+    revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
     return { success: true, guestId };
   }
 
@@ -651,19 +625,12 @@ export async function updateGuest(guestId: string, formData: FormData) {
     return { error: "Family invitation requires at least 2 members" };
   }
 
-  // Get existing guest to find current group_id
-  const { data: existing } = await supabase
-    .from("guests")
-    .select("group_id")
-    .eq("id", guestId)
-    .single();
-
   const effectiveGroupLabel = groupLabel?.trim() || guestName.trim();
-  const groupId = existing?.group_id || crypto.randomUUID();
+  const groupId = existing.group_id || crypto.randomUUID();
 
   // Get existing group members
   let existingMemberIds: string[] = [];
-  if (existing?.group_id) {
+  if (existing.group_id) {
     const { data: existingMembers } = await supabase
       .from("guests")
       .select("id")
@@ -677,39 +644,49 @@ export async function updateGuest(guestId: string, formData: FormData) {
   const toInsert = members.filter((m) => !m.id);
   const toUpdate = members.filter((m) => m.id);
 
-  // Delete removed members
+  // Delete, update and insert touch disjoint rows, so run them all in parallel.
+  const writes: PromiseLike<{ error: { message: string } | null }>[] = [];
+
   if (toDelete.length > 0) {
-    await supabase.from("guests").delete().in("id", toDelete);
+    writes.push(supabase.from("guests").delete().in("id", toDelete));
   }
 
-  // Update existing members
   for (const member of toUpdate) {
     const isPrimary = member.id === guestId;
-    await supabase
-      .from("guests")
-      .update({
-        guest_name: member.name.trim(),
-        custom_message: isPrimary ? (customMessage?.trim() || null) : null,
-        invitation_type: invitationType,
-        group_id: groupId,
-        group_label: effectiveGroupLabel,
-        is_primary: isPrimary,
-      })
-      .eq("id", member.id!);
+    writes.push(
+      supabase
+        .from("guests")
+        .update({
+          guest_name: member.name.trim(),
+          custom_message: isPrimary ? (customMessage?.trim() || null) : null,
+          invitation_type: invitationType,
+          group_id: groupId,
+          group_label: effectiveGroupLabel,
+          is_primary: isPrimary,
+        })
+        .eq("id", member.id!)
+    );
   }
 
-  // Insert new members
-  if (toInsert.length > 0 && targetWeddingId) {
-    const newRows = toInsert.map((m) => ({
-      wedding_id: targetWeddingId!,
-      guest_name: m.name.trim(),
-      custom_message: null,
-      invitation_type: invitationType,
-      group_id: groupId,
-      group_label: effectiveGroupLabel,
-      is_primary: false,
-    }));
-    await supabase.from("guests").insert(newRows);
+  if (toInsert.length > 0) {
+    writes.push(
+      supabase.from("guests").insert(
+        toInsert.map((m) => ({
+          wedding_id: targetWeddingId,
+          guest_name: m.name.trim(),
+          custom_message: null,
+          invitation_type: invitationType,
+          group_id: groupId,
+          group_label: effectiveGroupLabel,
+          is_primary: false,
+        }))
+      )
+    );
+  }
+
+  const writeError = (await Promise.all(writes)).find((r) => r.error)?.error;
+  if (writeError) {
+    return { error: `Failed to save members: ${writeError.message}` };
   }
 
   // The edited guest is always the invitation's primary, which holds the phone.
@@ -720,10 +697,8 @@ export async function updateGuest(guestId: string, formData: FormData) {
   const sideError = await saveGuestSide(supabase, { groupId }, guestSide);
   if (sideError) return { error: sideError };
 
-  if (targetWeddingId) {
-    revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
-    revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
-  }
+  revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
+  revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
   return { success: true, guestId };
 }
 
@@ -814,51 +789,23 @@ export async function setRsvpStatus(guestIds: string[], status: Guest["rsvp_stat
 }
 
 // ---------- Delete Guest ----------
-export async function deleteGuest(guestId: string, weddingId?: string) {
+export async function deleteGuest(guestId: string) {
   const supabase = createServerClient();
 
-  let targetWeddingId = weddingId;
-
-  // Fetch the guest to find group_id and wedding_id
-  const { data: guest } = await supabase
-    .from("guests")
-    .select("wedding_id, group_id")
-    .eq("id", guestId)
-    .single();
-
-  if (!targetWeddingId) {
-    targetWeddingId = guest?.wedding_id;
-  }
-
-  if (targetWeddingId) {
-    const hasAccess = await canAccessWedding(targetWeddingId);
-    if (!hasAccess) {
-      return { error: "Unauthorized: You don't have access to this event" };
-    }
-  }
+  const auth = await authorizeGuest(supabase, guestId);
+  if ("error" in auth) return { error: auth.error };
+  const { guest } = auth;
 
   // If this guest is part of a group, delete all group members
-  if (guest?.group_id) {
-    const { error } = await supabase
-      .from("guests")
-      .delete()
-      .eq("group_id", guest.group_id);
+  const { error } = guest.group_id
+    ? await supabase.from("guests").delete().eq("group_id", guest.group_id)
+    : await supabase.from("guests").delete().eq("id", guestId);
 
-    if (error) {
-      return { error: error.message };
-    }
-  } else {
-    // Delete just this individual guest
-    const { error } = await supabase.from("guests").delete().eq("id", guestId);
-
-    if (error) {
-      return { error: error.message };
-    }
+  if (error) {
+    return { error: error.message };
   }
 
-  if (targetWeddingId) {
-    revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
-  }
+  revalidatePath(`/admin/events/${guest.wedding_id}/dashboard`);
   return { success: true };
 }
 
@@ -912,6 +859,30 @@ async function saveGuestSide(
   return `Failed to save guest side: ${error.message}`;
 }
 
+// ---------- Helper: Authorize Guest ----------
+/**
+ * Load a guest and check the caller may manage its wedding.
+ * Access is always checked against the wedding the guest actually belongs to in the
+ * database — never a wedding ID sent by the client, which a user could swap for their own.
+ */
+async function authorizeGuest(
+  supabase: ReturnType<typeof createServerClient>,
+  guestId: string
+): Promise<{ guest: { wedding_id: string; group_id: string | null } } | { error: string }> {
+  const { data: guest } = await supabase
+    .from("guests")
+    .select("wedding_id, group_id")
+    .eq("id", guestId)
+    .single();
+
+  // Same message whether the guest is missing or belongs to another event,
+  // so the response doesn't reveal which guest IDs exist.
+  if (!guest || !(await canAccessWedding(guest.wedding_id))) {
+    return { error: "Unauthorized: You don't have access to this guest" };
+  }
+  return { guest };
+}
+
 // ---------- Helper: Handle Removed URLs ----------
 async function handleRemovedUrls(
   supabase: ReturnType<typeof createServerClient>,
@@ -920,12 +891,12 @@ async function handleRemovedUrls(
   if (!removedUrlsJson) return;
   try {
     const removedUrls: string[] = JSON.parse(removedUrlsJson);
-    for (const url of removedUrls) {
-      // Extract the path from the full URL
-      const pathMatch = url.match(/invite-photos\/(.+)$/);
-      if (pathMatch) {
-        await supabase.storage.from("invite-photos").remove([pathMatch[1]]);
-      }
+    // Extract the storage paths from the full URLs and delete them in one request
+    const paths = removedUrls
+      .map((url) => url.match(/invite-photos\/(.+)$/)?.[1])
+      .filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      await supabase.storage.from("invite-photos").remove(paths);
     }
   } catch {
     console.error("Failed to parse removed URLs");
@@ -940,34 +911,31 @@ async function uploadWeddingPhotos(
   formData: FormData,
   fieldName: string
 ): Promise<string[]> {
-  const photos = formData.getAll(fieldName) as File[];
-  const urls: string[] = [];
+  const photos = (formData.getAll(fieldName) as File[]).filter((photo) => photo && photo.size > 0);
 
-  for (const photo of photos) {
-    if (!photo || photo.size === 0) continue;
+  // Upload in parallel; Promise.all keeps the original order of the photos.
+  const results = await Promise.all(
+    photos.map(async (photo) => {
+      const ext = photo.name.split(".").pop() || "jpg";
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = `wedding-${weddingId}/${filename}`;
 
-    const ext = photo.name.split(".").pop() || "jpg";
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const path = `wedding-${weddingId}/${filename}`;
+      const { error: uploadError } = await supabase.storage
+        .from("invite-photos")
+        .upload(path, photo, {
+          contentType: photo.type,
+          upsert: false,
+        });
 
-    const { error: uploadError } = await supabase.storage
-      .from("invite-photos")
-      .upload(path, photo, {
-        contentType: photo.type,
-        upsert: false,
-      });
+      if (uploadError) {
+        console.error(`Failed to upload ${photo.name}:`, uploadError);
+        return null;
+      }
 
-    if (uploadError) {
-      console.error(`Failed to upload ${photo.name}:`, uploadError);
-      continue;
-    }
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("invite-photos").getPublicUrl(path);
-
-    urls.push(publicUrl);
-  }
+      return supabase.storage.from("invite-photos").getPublicUrl(path).data.publicUrl;
+    })
+  );
+  const urls = results.filter((url): url is string => url !== null);
 
   return urls;
 }

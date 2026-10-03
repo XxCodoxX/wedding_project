@@ -12,30 +12,26 @@ interface PageProps {
 }
 
 export default async function EditGuestPage({ params }: PageProps) {
-  const profile = await getUserProfile();
+  const { id: weddingId, guestId } = await params;
+  const [profile, hasAccess] = await Promise.all([getUserProfile(), canAccessWedding(weddingId)]);
   if (!profile) {
     redirect("/admin/login");
   }
-
-  const { id: weddingId, guestId } = await params;
-  const hasAccess = await canAccessWedding(weddingId);
   if (!hasAccess) {
     redirect("/admin/events");
   }
 
   const supabase = createServerClient();
 
-  const { data: guest, error: guestError } = await supabase
-    .from("guests")
-    .select("*")
-    .eq("id", guestId)
-    .single();
-
-  const { data: wedding, error: weddingError } = await supabase
-    .from("weddings")
-    .select("id, groom_name, bride_name, wedding_date, venue_name, whatsapp_message_template")
-    .eq("id", weddingId)
-    .single();
+  // Guest + wedding are independent — fetch in parallel.
+  const [{ data: guest, error: guestError }, { data: wedding, error: weddingError }] = await Promise.all([
+    supabase.from("guests").select("*").eq("id", guestId).single(),
+    supabase
+      .from("weddings")
+      .select("id, groom_name, bride_name, wedding_date, venue_name, whatsapp_message_template")
+      .eq("id", weddingId)
+      .single(),
+  ]);
 
   if (guestError || !guest || weddingError || !wedding) {
     notFound();

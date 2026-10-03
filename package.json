@@ -12,7 +12,6 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.112.3",
     "@vercel/speed-insights": "^2.0.0",
-    "framer-motion": "^13.1.1",
     "jose": "^6.2.10",
     "next": "16.3.6",
     "papaparse": "^5.7.0",

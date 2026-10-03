@@ -60,10 +60,9 @@ export async function createAuthMiddlewareClient(request: NextRequest) {
     }
   );
 
-  // Refresh the session — this is critical for keeping the session alive
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verifies the JWT (locally, via the cached JWKS) and refreshes the session if it's about to expire.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? { id: data.claims.sub } : null;
 
   return { supabase, user, response: supabaseResponse };
 }

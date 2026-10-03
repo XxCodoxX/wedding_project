@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { TemplateDefinition } from "@/templates/registry";
+import { TEMPLATE_COMPONENTS } from "@/templates/components";
 
 interface TemplatePreviewModalProps {
   onClose: () => void;
@@ -45,7 +46,7 @@ export default function TemplatePreviewModal({
     created_at: new Date().toISOString(),
   };
 
-  const TemplateComponent = template.component;
+  const TemplateComponent = TEMPLATE_COMPONENTS[template.id];
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-cream">
@@ -71,7 +72,7 @@ export default function TemplatePreviewModal({
 
       {/* Preview Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <TemplateComponent wedding={mockWedding as any} isPreview={true} />
+        {TemplateComponent && <TemplateComponent wedding={mockWedding as any} isPreview={true} />}
       </div>
     </div>
   );

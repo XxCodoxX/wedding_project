@@ -1,8 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { TEMPLATE_REGISTRY, TemplateDefinition } from "@/templates/registry";
-import TemplatePreviewModal from "@/components/admin/TemplatePreviewModal";
+
+// Lazy-load: the preview pulls in the invitation templates, which only download when it's opened.
+const TemplatePreviewModal = dynamic(() => import("@/components/admin/TemplatePreviewModal"), { ssr: false });
 
 export default function TemplateGrid() {
   const [previewTemplate, setPreviewTemplate] = useState<TemplateDefinition | null>(null);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
+import { RSVP_MESSAGE_MAX_LENGTH } from "@/lib/rsvp-message";
 
 interface RsvpMember {
   id: string;
@@ -15,6 +16,8 @@ interface RsvpFormProps {
   currentStatus: "pending" | "attending" | "not_attending";
   /** For couple/family invitations — each member gets their own RSVP row */
   groupMembers?: RsvpMember[];
+  /** Encrypted invite code; the API only accepts RSVPs for this invitation's guests. Absent in previews. */
+  inviteCode?: string;
 }
 
 export default function RsvpForm({
@@ -22,11 +25,12 @@ export default function RsvpForm({
   guestName,
   currentStatus,
   groupMembers,
+  inviteCode,
 }: RsvpFormProps) {
   const isGroup = groupMembers && groupMembers.length > 1;
 
   if (isGroup) {
-    return <GroupRsvpForm groupMembers={groupMembers} />;
+    return <GroupRsvpForm groupMembers={groupMembers} inviteCode={inviteCode} />;
   }
 
   return (
@@ -34,6 +38,7 @@ export default function RsvpForm({
       guestId={guestId}
       guestName={guestName}
       currentStatus={currentStatus}
+      inviteCode={inviteCode}
     />
   );
 }
@@ -46,10 +51,12 @@ function SingleRsvpForm({
   guestId,
   guestName,
   currentStatus,
+  inviteCode,
 }: {
   guestId: string;
   guestName: string;
   currentStatus: "pending" | "attending" | "not_attending";
+  inviteCode?: string;
 }) {
   const [status, setStatus] = useState<"attending" | "not_attending" | null>(
     currentStatus !== "pending" ? currentStatus : null
@@ -70,8 +77,8 @@ function SingleRsvpForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          code: inviteCode,
           guestId,
-          guestName,
           rsvpStatus: status,
           message: message.trim() || undefined,
         }),
@@ -221,6 +228,7 @@ function SingleRsvpForm({
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  maxLength={RSVP_MESSAGE_MAX_LENGTH}
                   rows={3}
                   placeholder="Send your warm wishes, blessings, or notes for the couple (optional)..."
                   className="w-full px-4 py-3 rounded-xl bg-white/60 border border-gold/20 text-navy placeholder-navy/35 font-outfit text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/40 transition-all resize-none"
@@ -261,7 +269,7 @@ function SingleRsvpForm({
 // Group RSVP (Couple / Family)
 // ────────────────────────────────────────
 
-function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
+function GroupRsvpForm({ groupMembers, inviteCode }: { groupMembers: RsvpMember[]; inviteCode?: string }) {
   type MemberStatus = "attending" | "not_attending" | null;
 
   const [memberStatuses, setMemberStatuses] = useState<Record<string, MemberStatus>>(() => {
@@ -297,9 +305,9 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          code: inviteCode,
           responses: groupMembers.map((member) => ({
             guestId: member.id,
-            guestName: member.name,
             rsvpStatus: memberStatuses[member.id],
           })),
           message: message.trim() || undefined,
@@ -460,6 +468,7 @@ function GroupRsvpForm({ groupMembers }: { groupMembers: RsvpMember[] }) {
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  maxLength={RSVP_MESSAGE_MAX_LENGTH}
                   rows={3}
                   placeholder="Send your warm wishes, blessings, or notes for the couple (optional)..."
                   className="w-full px-4 py-3 rounded-xl bg-white/60 border border-gold/20 text-navy placeholder-navy/35 font-outfit text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/40 transition-all resize-none"

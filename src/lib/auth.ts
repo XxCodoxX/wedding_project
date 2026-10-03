@@ -14,17 +14,27 @@ export interface UserProfile {
   created_at: string;
 }
 
+export interface AuthUser {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+}
+
 /**
  * Check if the current user is authenticated.
- * Returns the Supabase Auth user object if authenticated, null otherwise.
+ * Returns the verified identity from the session JWT, or null.
+ *
+ * Uses getClaims(): with the project's asymmetric (ES256) signing key the JWT is verified
+ * locally against the cached JWKS, so this costs no Auth API round trip (getUser() always did).
+ * Memoized per request so layout + page share one check.
  */
-export async function getAuthUser() {
+export const getAuthUser = cache(async function getAuthUser(): Promise<AuthUser | null> {
   const supabase = await createAuthServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
-}
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims?.sub) return null;
+  const { sub, email, user_metadata } = data.claims;
+  return { id: sub, email, user_metadata };
+});
 
 /**
  * Get the current user's profile including role and assigned wedding.
@@ -56,7 +66,7 @@ export const getUserProfile = cache(async function getUserProfile(): Promise<Use
       .insert({
         auth_user_id: user.id,
         email: user.email || "",
-        full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Admin",
+        full_name: (user.user_metadata?.full_name as string | undefined) || user.email?.split("@")[0] || "Admin",
         role: "admin",
       })
       .select()

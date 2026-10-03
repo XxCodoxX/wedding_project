@@ -19,7 +19,7 @@ const cinzel = Cinzel({ subsets: ["latin"], weight: ["400", "600", "700"], displ
  * Tapping "Open Invitation" reveals the second screen (InvitationScreen)
  * with a solid fixed background (image + rotating mandala) and full invitation details.
  */
-export default function OrnateTemplate({ wedding, guest, groupMembers, isPreview }: TemplateProps) {
+export default function OrnateTemplate({ wedding, guest, groupMembers, isPreview, inviteCode }: TemplateProps) {
   const [isOpened, setIsOpened] = useState(false);
 
   const dateObj = new Date(wedding.wedding_date);
@@ -55,6 +55,7 @@ export default function OrnateTemplate({ wedding, guest, groupMembers, isPreview
       guest={guest}
       groupMembers={groupMembers}
       isPreview={isPreview}
+      inviteCode={inviteCode}
       backgroundImage={backgroundImage}
       dateObj={dateObj}
     />
@@ -70,11 +71,12 @@ interface InvitationScreenProps {
   guest: TemplateProps["guest"];
   groupMembers?: TemplateProps["groupMembers"];
   isPreview?: boolean;
+  inviteCode?: string;
   backgroundImage: string;
   dateObj: Date;
 }
 
-function InvitationScreen({ wedding, guest, groupMembers, isPreview, backgroundImage, dateObj }: InvitationScreenProps) {
+function InvitationScreen({ wedding, guest, groupMembers, isPreview, inviteCode, backgroundImage, dateObj }: InvitationScreenProps) {
   const venueName = wedding.venue_name || (wedding as any).venue;
   const venueAddress = wedding.venue_location || (wedding as any).venue_address || (wedding as any).location;
   const mapUrl =
@@ -461,6 +463,7 @@ function InvitationScreen({ wedding, guest, groupMembers, isPreview, backgroundI
                   guestId={guest?.id || "mock-guest-id"}
                   guestName={guest?.guest_name || "John Doe"}
                   currentStatus={guest?.rsvp_status || "pending"}
+                  inviteCode={inviteCode}
                   groupMembers={
                     groupMembers && groupMembers.length > 1
                       ? groupMembers.map((m) => ({
