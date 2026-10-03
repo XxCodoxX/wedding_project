@@ -12,6 +12,7 @@ import RsvpControl from "./RsvpControl";
 import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
+import { matchesRsvpFilter, parseRsvpFilter, type RsvpFilter } from "@/lib/rsvp-filter";
 
 /** One invitation row (a group, or an individual guest). Built on the server — the invite code needs the secret key. */
 export interface GuestGroup {
@@ -33,9 +34,11 @@ interface GuestTableProps {
 const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
 const sideOf = (g: GuestGroup) => g.primaryGuest.guest_side ?? null;
 const matchesDelivery = (g: GuestGroup, f: InviteFilter) => f === "all" || statusOf(g) === f;
+const matchesSide = (g: GuestGroup, f: SideFilter) => matchesSideFilter(sideOf(g), f);
+const matchesRsvp = (g: GuestGroup, f: RsvpFilter) => matchesRsvpFilter(g.members, f);
 
 /**
- * Filters (search, delivery, side) run in the browser against the already-loaded guest list.
+ * Filters (search, delivery, side, RSVP) run in the browser against the already-loaded guest list.
  * The URL is still the source of truth (shareable, survives refresh, kept by live updates), but it's
  * updated with the native History API, which Next.js syncs into useSearchParams WITHOUT a server
  * round trip — so switching tabs is instant instead of re-running auth + queries + the loading skeleton.
@@ -45,6 +48,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
   const searchParams = useSearchParams();
   const filter = parseInviteFilter(searchParams.get("filter") ?? undefined);
   const sideFilter = parseSideFilter(searchParams.get("side") ?? undefined);
+  const rsvpFilter = parseRsvpFilter(searchParams.get("rsvp") ?? undefined);
   const urlQuery = parseSearchQuery(searchParams.get("q") ?? undefined);
   // Typing stays responsive on big lists; the table catches up a frame later.
   const query = useDeferredValue(urlQuery);
@@ -64,20 +68,26 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
     [searchable, groups, query]
   );
 
-  // Each filter's counts follow the search AND the other filter, so the numbers always add up.
-  const { visibleGroups, deliveryCounts, sideCounts } = useMemo(() => {
-    const sided = searchedGroups.filter((g) => matchesSideFilter(sideOf(g), sideFilter));
-    const delivered = searchedGroups.filter((g) => matchesDelivery(g, filter));
+  // Each filter's counts follow the search AND the other filters, so the numbers always add up.
+  const { visibleGroups, deliveryCounts, sideCounts, rsvpCounts } = useMemo(() => {
+    const countBy = <T extends string>(
+      tabs: readonly { value: T }[],
+      base: GuestGroup[],
+      matches: (g: GuestGroup, value: T) => boolean
+    ) => Object.fromEntries(tabs.map((t) => [t.value, base.filter((g) => matches(g, t.value)).length])) as Record<T, number>;
+
+    // Groups passing every filter except the one being counted.
+    const exceptDelivery = searchedGroups.filter((g) => matchesSide(g, sideFilter) && matchesRsvp(g, rsvpFilter));
+    const exceptSide = searchedGroups.filter((g) => matchesDelivery(g, filter) && matchesRsvp(g, rsvpFilter));
+    const exceptRsvp = searchedGroups.filter((g) => matchesDelivery(g, filter) && matchesSide(g, sideFilter));
+
     return {
-      visibleGroups: sided.filter((g) => matchesDelivery(g, filter)),
-      deliveryCounts: Object.fromEntries(
-        DELIVERY_TABS.map((t) => [t.value, sided.filter((g) => matchesDelivery(g, t.value)).length])
-      ) as Record<InviteFilter, number>,
-      sideCounts: Object.fromEntries(
-        SIDE_TABS.map((t) => [t.value, delivered.filter((g) => matchesSideFilter(sideOf(g), t.value)).length])
-      ) as Record<SideFilter, number>,
+      visibleGroups: exceptRsvp.filter((g) => matchesRsvp(g, rsvpFilter)),
+      deliveryCounts: countBy(DELIVERY_TABS, exceptDelivery, matchesDelivery),
+      sideCounts: countBy(SIDE_TABS, exceptSide, matchesSide),
+      rsvpCounts: countBy(RSVP_TABS, exceptRsvp, matchesRsvp),
     };
-  }, [searchedGroups, filter, sideFilter]);
+  }, [searchedGroups, filter, sideFilter, rsvpFilter]);
 
   const peopleBySide = useMemo(() => {
     let groom = 0;
@@ -92,11 +102,12 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
   }, [groups]);
   const peopleWithoutSide = totalPeople - peopleBySide.groom - peopleBySide.bride;
 
-  const hrefFor = (next: { filter?: InviteFilter; side?: SideFilter; q?: string }) => {
+  const hrefFor = (next: { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; q?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
     const set = (key: string, value: string, empty: string) =>
       value && value !== empty ? params.set(key, value) : params.delete(key);
     if (next.side !== undefined) set("side", next.side, "all");
+    if (next.rsvp !== undefined) set("rsvp", next.rsvp, "all");
     if (next.filter !== undefined) set("filter", next.filter, "all");
     if (next.q !== undefined) set("q", next.q, "");
     const qs = params.toString();
@@ -195,6 +206,32 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
         </p>
       </div>
 
+      {/* RSVP filter */}
+      <nav aria-label="Filter by RSVP status" className="flex flex-wrap gap-2 mb-6 -mt-2">
+        {RSVP_TABS.map((tab) => {
+          const active = rsvpFilter === tab.value;
+          return (
+            <a
+              key={tab.value}
+              href={hrefFor({ rsvp: tab.value })}
+              onClick={navigate}
+              aria-current={active ? "page" : undefined}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
+                active
+                  ? tab.activeClasses
+                  : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+              }`}
+            >
+              <span aria-hidden>{tab.icon}</span>
+              {tab.label}
+              <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
+                {rsvpCounts[tab.value]}
+              </span>
+            </a>
+          );
+        })}
+      </nav>
+
       {query && (
         <p className="text-sm text-admin-text-muted -mt-3 mb-4" aria-live="polite">
           {visibleGroups.length} of {groups.length} invitation{groups.length === 1 ? "" : "s"} match &ldquo;{query}&rdquo;
@@ -203,11 +240,11 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
 
       {visibleGroups.length === 0 ? (
         <div className="glass-dark rounded-2xl p-12 text-center">
-          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" ? "🎉" : "🔍"}</div>
+          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" && rsvpFilter === "all" ? "🎉" : "🔍"}</div>
           <p className="text-admin-text-muted text-sm">
             {query
-              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" ? " in this filter" : ""}.</>
-              : filter === "not_sent" && sideFilter === "all"
+              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" || rsvpFilter !== "all" ? " in this filter" : ""}.</>
+              : filter === "not_sent" && sideFilter === "all" && rsvpFilter === "all"
                 ? "Every invitation has been sent."
                 : "No invitations match this filter."}
           </p>
@@ -272,6 +309,13 @@ const SIDE_TABS: { value: SideFilter; label: string; icon: string; activeClasses
   { value: "groom", label: "Groom's side", icon: "🤵", activeClasses: "border-sky-500 bg-sky-500/10 text-sky-400" },
   { value: "bride", label: "Bride's side", icon: "👰", activeClasses: "border-pink-500 bg-pink-500/10 text-pink-400" },
   { value: "unassigned", label: "Not set", icon: "➖", activeClasses: "border-admin-accent bg-admin-accent/10 text-admin-accent" },
+];
+
+const RSVP_TABS: { value: RsvpFilter; label: string; icon: string; activeClasses: string }[] = [
+  { value: "all", label: "All RSVPs", icon: "📋", activeClasses: "border-admin-accent bg-admin-accent/10 text-admin-accent" },
+  { value: "attending", label: "Attending", icon: "✅", activeClasses: "border-admin-success bg-admin-success/10 text-admin-success" },
+  { value: "not_attending", label: "Not attending", icon: "❌", activeClasses: "border-admin-danger bg-admin-danger/10 text-admin-danger" },
+  { value: "pending", label: "Pending", icon: "⏳", activeClasses: "border-admin-warning bg-admin-warning/10 text-admin-warning" },
 ];
 
 // ---------- Rows (memoized: switching filters only mounts/unmounts rows, never re-renders kept ones) ----------
