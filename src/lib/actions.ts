@@ -732,7 +732,8 @@ export async function markInviteSent(guestId: string, sent: boolean) {
     if (isMissingTrackingColumn(error)) return { error: TRACKING_MIGRATION_ERROR };
     if (error) return { error: `Failed to update invite status: ${error.message}` };
 
-    revalidatePath(`/admin/events/${guest.wedding_id}/dashboard`);
+    // No revalidatePath: the dashboard is force-dynamic, and a Server Action that revalidates makes the
+    // router scroll to the top. The caller's router.refresh() (NoScroll) keeps the admin's place.
     return { success: true, sentAt };
   } catch (e) {
     console.error("markInviteSent failed:", e);
@@ -780,7 +781,8 @@ export async function setRsvpStatus(guestIds: string[], status: Guest["rsvp_stat
       .eq("wedding_id", weddingId);
     if (error) return { error: `Failed to update RSVP: ${error.message}` };
 
-    revalidatePath(`/admin/events/${weddingId}/dashboard`);
+    // No revalidatePath: the dashboard is force-dynamic, and a Server Action that revalidates makes the
+    // router scroll to the top. The caller's router.refresh() (NoScroll) keeps the admin's place.
     return { success: true };
   } catch (e) {
     console.error("setRsvpStatus failed:", e);
@@ -805,7 +807,7 @@ export async function deleteGuest(guestId: string) {
     return { error: error.message };
   }
 
-  revalidatePath(`/admin/events/${guest.wedding_id}/dashboard`);
+  // See setRsvpStatus — the caller refreshes without losing the scroll position.
   return { success: true };
 }
 
