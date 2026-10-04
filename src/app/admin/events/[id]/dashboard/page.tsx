@@ -73,9 +73,16 @@ export default async function DashboardPage({ params }: PageProps) {
   const supabase = createServerClient();
 
   // Wedding + guests in parallel. Filters (?filter=, ?side=, ?q=) are applied client-side in GuestTable.
+  // Rows inserted together (a family, a bulk import) share created_at, and Postgres returns ties in
+  // no fixed order — an UPDATE (e.g. an RSVP change) would reshuffle them. `id` makes the order stable.
   const [{ data: wedding, error: weddingError }, { data: guests, error }] = await Promise.all([
     supabase.from("weddings").select("*").eq("id", weddingId).single(),
-    supabase.from("guests").select("*").eq("wedding_id", weddingId).order("created_at", { ascending: false }),
+    supabase
+      .from("guests")
+      .select("*")
+      .eq("wedding_id", weddingId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }),
   ]);
 
   if (weddingError || !wedding) {
