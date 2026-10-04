@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useDeferredValue, useMemo, type MouseEvent } from "react";
+import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { Guest, Wedding } from "@/lib/supabase";
@@ -9,6 +9,7 @@ import CopyLinkButtonClient from "./CopyLinkButtonClient";
 import InviteStatusCell from "./InviteStatusCell";
 import GuestSearch from "./GuestSearch";
 import RsvpControl from "./RsvpControl";
+import StickyFilterBar, { type CompactFilter } from "./StickyFilterBar";
 import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
@@ -36,6 +37,13 @@ const sideOf = (g: GuestGroup) => g.primaryGuest.guest_side ?? null;
 const matchesDelivery = (g: GuestGroup, f: InviteFilter) => f === "all" || statusOf(g) === f;
 const matchesSide = (g: GuestGroup, f: SideFilter) => matchesSideFilter(sideOf(g), f);
 const matchesRsvp = (g: GuestGroup, f: RsvpFilter) => matchesRsvpFilter(g.members, f);
+
+/** Scroll so the top of the results sits just under the sticky bar — only ever up, never down. */
+function scrollResultsUnderBar(results: HTMLElement | null, bar: HTMLElement | null) {
+  if (!results || !bar) return;
+  const top = window.scrollY + results.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 12;
+  if (top < window.scrollY) window.scrollTo({ top });
+}
 
 /**
  * Filters (search, delivery, side, RSVP) run in the browser against the already-loaded guest list.
@@ -102,6 +110,88 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
   }, [groups]);
   const peopleWithoutSide = totalPeople - peopleBySide.groom - peopleBySide.bride;
 
+  // ---------- Sticky filter bar ----------
+  const hasGuests = groups.length > 0;
+  const filterSectionRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  // After filtering from the bar, the results get at least a screen of height so they can always be
+  // scrolled up under the bar — even when only a couple of rows match. Filtering from the top resets it.
+  const [padResults, setPadResults] = useState(false);
+  const scrollPendingRef = useRef(false);
+
+  // The bar shows once the full filter section has scrolled out above the viewport.
+  useEffect(() => {
+    const section = filterSectionRef.current;
+    if (!section) return;
+    // -64px = the mobile header the bar sits under (on desktop the bar just appears slightly sooner).
+    const observer = new IntersectionObserver(
+      ([entry]) => setStuck(!entry.isIntersecting && entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0)),
+      { rootMargin: "-64px 0px 0px 0px" }
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [hasGuests]);
+
+  // Filtering from deep in the list: once the new results render, bring their top up under the bar.
+  const filterKey = `${filter}|${sideFilter}|${rsvpFilter}|${urlQuery}`;
+  useLayoutEffect(() => {
+    if (!scrollPendingRef.current) return;
+    scrollPendingRef.current = false;
+    scrollResultsUnderBar(resultsRef.current, barRef.current);
+  }, [filterKey]);
+
+  const afterBarChange = () => {
+    setPadResults(true);
+    const urlChanged = new URLSearchParams(window.location.search).toString() !== searchParams.toString();
+    if (urlChanged) scrollPendingRef.current = true; // wait for the filtered render
+    else scrollResultsUnderBar(resultsRef.current, barRef.current); // e.g. Enter on the same search
+  };
+
+  const applyFromBar = (next: { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; q?: string }) => {
+    window.history.pushState(null, "", hrefFor(next));
+    afterBarChange();
+  };
+
+  const backToFilters = () => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    filterSectionRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    // Moving focus out of the bar lets it hide; the main search is the natural next stop.
+    document.getElementById("guest-search")?.focus({ preventScroll: true });
+  };
+
+  const activeFilterCount = [filter !== "all", sideFilter !== "all", rsvpFilter !== "all", urlQuery !== ""].filter(Boolean).length;
+
+  const compactFilters: CompactFilter[] = [
+    {
+      label: "Filter by invitation delivery",
+      value: filter,
+      options: DELIVERY_TABS.map((t) => ({
+        value: t.value,
+        label: t.value === "all" ? "All invites" : t.label,
+        count: deliveryCounts[t.value],
+      })),
+      onChange: (v) => applyFromBar({ filter: parseInviteFilter(v) }),
+    },
+    {
+      label: "Filter by guest side",
+      value: sideFilter,
+      options: SIDE_TABS.map((t) => ({
+        value: t.value,
+        label: t.value === "groom" || t.value === "bride" ? sideLabel(t.value, wedding) : t.label,
+        count: sideCounts[t.value],
+      })),
+      onChange: (v) => applyFromBar({ side: parseSideFilter(v) }),
+    },
+    {
+      label: "Filter by RSVP status",
+      value: rsvpFilter,
+      options: RSVP_TABS.map((t) => ({ value: t.value, label: t.label, count: rsvpCounts[t.value] })),
+      onChange: (v) => applyFromBar({ rsvp: parseRsvpFilter(v) }),
+    },
+  ];
+
   const hrefFor = (next: { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; q?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
     const set = (key: string, value: string, empty: string) =>
@@ -119,6 +209,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     window.history.pushState(null, "", e.currentTarget.href);
+    setPadResults(false);
   };
 
   if (groups.length === 0) {
@@ -141,47 +232,90 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
 
   return (
     <>
-      {/* Search + delivery filter */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
-        <nav aria-label="Filter by invitation delivery" className="flex flex-wrap gap-2 order-2 lg:order-1">
-          {DELIVERY_TABS.map((tab) => {
-            const active = filter === tab.value;
-            return (
-              <a
-                key={tab.value}
-                href={hrefFor({ filter: tab.value })}
-                onClick={navigate}
-                aria-current={active ? "page" : undefined}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm border transition-all ${
-                  active
-                    ? "border-admin-accent bg-admin-accent/10 text-admin-accent"
-                    : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
-                }`}
-              >
-                <span aria-hidden>{tab.icon}</span>
-                {tab.label}
-                <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-admin-accent/20" : "bg-admin-border/30"}`}>
-                  {deliveryCounts[tab.value]}
-                </span>
-              </a>
-            );
-          })}
-        </nav>
-        <div className="order-1 lg:order-2">
-          <GuestSearch />
-        </div>
-      </div>
+      <StickyFilterBar
+        ref={barRef}
+        stuck={stuck}
+        filters={compactFilters}
+        activeCount={activeFilterCount}
+        onQueryChange={afterBarChange}
+        onClear={() => applyFromBar({ filter: "all", side: "all", rsvp: "all", q: "" })}
+        onBackToFilters={backToFilters}
+      />
 
-      {/* Side filter (bride's / groom's side) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 -mt-2">
-        <nav aria-label="Filter by guest side" className="flex flex-wrap gap-2">
-          {SIDE_TABS.map((tab) => {
-            const active = sideFilter === tab.value;
-            const label = tab.value === "groom" || tab.value === "bride" ? sideLabel(tab.value, wedding) : tab.label;
+      <div ref={filterSectionRef} className="scroll-mt-20 lg:scroll-mt-8">
+        {/* Search + delivery filter */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
+          <nav aria-label="Filter by invitation delivery" className="flex flex-wrap gap-2 order-2 lg:order-1">
+            {DELIVERY_TABS.map((tab) => {
+              const active = filter === tab.value;
+              return (
+                <a
+                  key={tab.value}
+                  href={hrefFor({ filter: tab.value })}
+                  onClick={navigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm border transition-all ${
+                    active
+                      ? "border-admin-accent bg-admin-accent/10 text-admin-accent"
+                      : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+                  }`}
+                >
+                  <span aria-hidden>{tab.icon}</span>
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-admin-accent/20" : "bg-admin-border/30"}`}>
+                    {deliveryCounts[tab.value]}
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+          <div className="order-1 lg:order-2">
+            <GuestSearch shortcut={!stuck} onQueryChange={() => setPadResults(false)} />
+          </div>
+        </div>
+
+        {/* Side filter (bride's / groom's side) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 -mt-2">
+          <nav aria-label="Filter by guest side" className="flex flex-wrap gap-2">
+            {SIDE_TABS.map((tab) => {
+              const active = sideFilter === tab.value;
+              const label = tab.value === "groom" || tab.value === "bride" ? sideLabel(tab.value, wedding) : tab.label;
+              return (
+                <a
+                  key={tab.value}
+                  href={hrefFor({ side: tab.value })}
+                  onClick={navigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
+                    active
+                      ? tab.activeClasses
+                      : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+                  }`}
+                >
+                  <span aria-hidden>{tab.icon}</span>
+                  {label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
+                    {sideCounts[tab.value]}
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+          <p className="text-xs text-admin-text-muted">
+            People: <span className="text-sky-400 font-medium">{peopleBySide.groom}</span> groom&apos;s side ·{" "}
+            <span className="text-pink-400 font-medium">{peopleBySide.bride}</span> bride&apos;s side
+            {peopleWithoutSide > 0 && <> · {peopleWithoutSide} not set</>}
+          </p>
+        </div>
+
+        {/* RSVP filter */}
+        <nav aria-label="Filter by RSVP status" className="flex flex-wrap gap-2 mb-6 -mt-2">
+          {RSVP_TABS.map((tab) => {
+            const active = rsvpFilter === tab.value;
             return (
               <a
                 key={tab.value}
-                href={hrefFor({ side: tab.value })}
+                href={hrefFor({ rsvp: tab.value })}
                 onClick={navigate}
                 aria-current={active ? "page" : undefined}
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
@@ -191,108 +325,79 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
                 }`}
               >
                 <span aria-hidden>{tab.icon}</span>
-                {label}
+                {tab.label}
                 <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
-                  {sideCounts[tab.value]}
+                  {rsvpCounts[tab.value]}
                 </span>
               </a>
             );
           })}
         </nav>
-        <p className="text-xs text-admin-text-muted">
-          People: <span className="text-sky-400 font-medium">{peopleBySide.groom}</span> groom&apos;s side ·{" "}
-          <span className="text-pink-400 font-medium">{peopleBySide.bride}</span> bride&apos;s side
-          {peopleWithoutSide > 0 && <> · {peopleWithoutSide} not set</>}
-        </p>
       </div>
 
-      {/* RSVP filter */}
-      <nav aria-label="Filter by RSVP status" className="flex flex-wrap gap-2 mb-6 -mt-2">
-        {RSVP_TABS.map((tab) => {
-          const active = rsvpFilter === tab.value;
-          return (
-            <a
-              key={tab.value}
-              href={hrefFor({ rsvp: tab.value })}
-              onClick={navigate}
-              aria-current={active ? "page" : undefined}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
-                active
-                  ? tab.activeClasses
-                  : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
-              }`}
-            >
-              <span aria-hidden>{tab.icon}</span>
-              {tab.label}
-              <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
-                {rsvpCounts[tab.value]}
-              </span>
-            </a>
-          );
-        })}
-      </nav>
-
-      {query && (
-        <p className="text-sm text-admin-text-muted -mt-3 mb-4" aria-live="polite">
-          {visibleGroups.length} of {groups.length} invitation{groups.length === 1 ? "" : "s"} match &ldquo;{query}&rdquo;
-        </p>
-      )}
-
-      {visibleGroups.length === 0 ? (
-        <div className="glass-dark rounded-2xl p-12 text-center">
-          <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" && rsvpFilter === "all" ? "🎉" : "🔍"}</div>
-          <p className="text-admin-text-muted text-sm">
-            {query
-              ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" || rsvpFilter !== "all" ? " in this filter" : ""}.</>
-              : filter === "not_sent" && sideFilter === "all" && rsvpFilter === "all"
-                ? "Every invitation has been sent."
-                : "No invitations match this filter."}
+      <div ref={resultsRef} className={padResults ? "min-h-screen" : undefined}>
+        {query && (
+          <p className="text-sm text-admin-text-muted -mt-3 mb-4" aria-live="polite">
+            {visibleGroups.length} of {groups.length} invitation{groups.length === 1 ? "" : "s"} match &ldquo;{query}&rdquo;
           </p>
-          {query && (
-            <a
-              href={hrefFor({ q: "" })}
-              onClick={navigate}
-              className="inline-block mt-4 text-sm text-admin-accent hover:underline"
-            >
-              Clear search
-            </a>
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Desktop Table View */}
-          <div className="glass-dark rounded-2xl overflow-hidden hidden md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-admin-border">
-                    {["Guest / Group", "Type", "Side", "RSVP Status", "Invite", "Invite Link", "Created"].map((h) => (
-                      <th key={h} className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                        {h}
-                      </th>
-                    ))}
-                    <th className="text-right text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-admin-border/50">
-                  {visibleGroups.map((group) => (
-                    <GuestRow key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        )}
 
-          {/* Mobile Card View */}
-          <div className="space-y-3 md:hidden">
-            {visibleGroups.map((group) => (
-              <GuestCard key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
-            ))}
+        {visibleGroups.length === 0 ? (
+          <div className="glass-dark rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" && rsvpFilter === "all" ? "🎉" : "🔍"}</div>
+            <p className="text-admin-text-muted text-sm">
+              {query
+                ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" || rsvpFilter !== "all" ? " in this filter" : ""}.</>
+                : filter === "not_sent" && sideFilter === "all" && rsvpFilter === "all"
+                  ? "Every invitation has been sent."
+                  : "No invitations match this filter."}
+            </p>
+            {query && (
+              <a
+                href={hrefFor({ q: "" })}
+                onClick={navigate}
+                className="inline-block mt-4 text-sm text-admin-accent hover:underline"
+              >
+                Clear search
+              </a>
+            )}
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="glass-dark rounded-2xl overflow-hidden hidden md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-admin-border">
+                      {["Guest / Group", "Type", "Side", "RSVP Status", "Invite", "Invite Link", "Created"].map((h) => (
+                        <th key={h} className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                          {h}
+                        </th>
+                      ))}
+                      <th className="text-right text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-admin-border/50">
+                    {visibleGroups.map((group) => (
+                      <GuestRow key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="space-y-3 md:hidden">
+              {visibleGroups.map((group) => (
+                <GuestCard key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }
