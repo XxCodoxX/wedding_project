@@ -53,6 +53,8 @@ export default function GuestSearch({
     const params = new URLSearchParams(window.location.search); // latest, not the render-time snapshot
     const trimmed = next.trim();
     setPushedQuery(trimmed);
+    // A new search is a new list — start it from page 1 (Enter on the same query keeps the page).
+    if (trimmed !== (params.get("q") ?? "")) params.delete("page");
     if (trimmed) params.set("q", trimmed);
     else params.delete("q");
     const qs = params.toString();

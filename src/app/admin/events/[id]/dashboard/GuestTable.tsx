@@ -14,6 +14,8 @@ import { matchesSearch, parseSearchQuery } from "@/lib/guest-search";
 import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/invite-tracking";
 import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
 import { matchesRsvpFilter, parseRsvpFilter, type RsvpFilter } from "@/lib/rsvp-filter";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, paginate, parsePage, parsePageSize, type PageSize } from "@/lib/pagination";
+import GuestPagination from "./GuestPagination";
 
 /** One invitation row (a group, or an individual guest). Built on the server — the invite code needs the secret key. */
 export interface GuestGroup {
@@ -41,7 +43,8 @@ const matchesRsvp = (g: GuestGroup, f: RsvpFilter) => matchesRsvpFilter(g.member
 /** Scroll so the top of the results sits just under the sticky bar — only ever up, never down. */
 function scrollResultsUnderBar(results: HTMLElement | null, bar: HTMLElement | null) {
   if (!results || !bar) return;
-  const top = window.scrollY + results.getBoundingClientRect().top - bar.getBoundingClientRect().bottom - 12;
+  // offsetTop/offsetHeight ignore the bar's slide-in transform, so this is right even while it's still hidden.
+  const top = window.scrollY + results.getBoundingClientRect().top - (bar.offsetTop + bar.offsetHeight) - 12;
   if (top < window.scrollY) window.scrollTo({ top });
 }
 
@@ -97,6 +100,14 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
     };
   }, [searchedGroups, filter, sideFilter, rsvpFilter]);
 
+  // ---------- Pagination (client-side slice of the filtered list) ----------
+  const pageSize = parsePageSize(searchParams.get("per"));
+  const pageWindow = paginate(visibleGroups.length, parsePage(searchParams.get("page")), pageSize);
+  const pageGroups = useMemo(
+    () => visibleGroups.slice(pageWindow.start, pageWindow.end),
+    [visibleGroups, pageWindow.start, pageWindow.end]
+  );
+
   const peopleBySide = useMemo(() => {
     let groom = 0;
     let bride = 0;
@@ -134,13 +145,13 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
     return () => observer.disconnect();
   }, [hasGuests]);
 
-  // Filtering from deep in the list: once the new results render, bring their top up under the bar.
-  const filterKey = `${filter}|${sideFilter}|${rsvpFilter}|${urlQuery}`;
+  // Filtering or paging from deep in the list: once the new results render, bring their top up under the bar.
+  const resultsKey = `${filter}|${sideFilter}|${rsvpFilter}|${urlQuery}|${pageWindow.page}|${pageSize}`;
   useLayoutEffect(() => {
     if (!scrollPendingRef.current) return;
     scrollPendingRef.current = false;
     scrollResultsUnderBar(resultsRef.current, barRef.current);
-  }, [filterKey]);
+  }, [resultsKey]);
 
   const afterBarChange = () => {
     setPadResults(true);
@@ -200,8 +211,33 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
     if (next.rsvp !== undefined) set("rsvp", next.rsvp, "all");
     if (next.filter !== undefined) set("filter", next.filter, "all");
     if (next.q !== undefined) set("q", next.q, "");
+    // A different filter or search is a different list — start it from page 1.
+    params.delete("page");
     const qs = params.toString();
     return qs ? `${pathname}?${qs}` : pathname;
+  };
+
+  const hrefForPage = (page: number, per: PageSize = pageSize) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page > 1) params.set("page", String(page));
+    else params.delete("page");
+    if (per !== DEFAULT_PAGE_SIZE) params.set("per", String(per));
+    else params.delete("per");
+    const qs = params.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  };
+
+  const navigateToPage = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    window.history.pushState(null, "", e.currentTarget.href);
+    scrollPendingRef.current = true; // the pager sits under the table — bring the new page's top into view
+  };
+
+  // Keep the first invitation on screen in view: row 26 at 25/page → page 1 at 50/page.
+  const changePageSize = (per: PageSize) => {
+    window.history.pushState(null, "", hrefForPage(Math.floor(pageWindow.start / per) + 1, per));
+    scrollPendingRef.current = true;
   };
 
   // Plain clicks update the URL in place; ctrl/cmd/middle-click still open a new tab via the real href.
@@ -381,7 +417,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-admin-border/50">
-                    {visibleGroups.map((group) => (
+                    {pageGroups.map((group) => (
                       <GuestRow key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
                     ))}
                   </tbody>
@@ -391,10 +427,22 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
 
             {/* Mobile Card View */}
             <div className="space-y-3 md:hidden">
-              {visibleGroups.map((group) => (
+              {pageGroups.map((group) => (
                 <GuestCard key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
               ))}
             </div>
+
+            {/* Small lists don't need a pager at all. */}
+            {visibleGroups.length > PAGE_SIZES[0] && (
+              <GuestPagination
+                window={pageWindow}
+                total={visibleGroups.length}
+                pageSize={pageSize}
+                hrefForPage={hrefForPage}
+                onNavigate={navigateToPage}
+                onPageSizeChange={changePageSize}
+              />
+            )}
           </>
         )}
       </div>
