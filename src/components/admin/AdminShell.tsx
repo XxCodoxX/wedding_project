@@ -196,6 +196,10 @@ export default function AdminShell({
             </svg>
             {loggingOut ? "Signing out..." : "Logout"}
           </button>
+          <p className="px-4 text-[10px] text-admin-text-muted/50 tracking-wider" title="Running release">
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+            {process.env.NEXT_PUBLIC_COMMIT_SHA && <> · {process.env.NEXT_PUBLIC_COMMIT_SHA}</>}
+          </p>
         </div>
       </aside>
 
