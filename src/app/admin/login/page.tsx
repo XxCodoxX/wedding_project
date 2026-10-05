@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import ProjectLogo from "@/components/common/ProjectLogo";
 
@@ -63,6 +63,13 @@ export default function AdminLoginPage() {
               Admin Portal
             </p>
           </div>
+
+          {/* Why the admin was signed out (set by the proxy's session limits) */}
+          {!error && (
+            <Suspense>
+              <SessionEndedNotice />
+            </Suspense>
+          )}
 
           {/* Error */}
           {error && (
@@ -136,6 +143,23 @@ export default function AdminLoginPage() {
           Protected area • Wedding Invitation Admin
         </p>
       </div>
+    </div>
+  );
+}
+
+const SESSION_ENDED_MESSAGES: Record<string, string> = {
+  expired: "Your session has expired. Please sign in again.",
+  idle: "You were signed out after a period of inactivity. Please sign in again.",
+};
+
+function SessionEndedNotice() {
+  const reason = useSearchParams().get("reason");
+  const message = reason ? SESSION_ENDED_MESSAGES[reason] : undefined;
+  if (!message) return null;
+
+  return (
+    <div role="status" className="mb-6 p-3 rounded-lg bg-admin-warning/10 border border-admin-warning/20 text-admin-warning text-sm text-center">
+      {message}
     </div>
   );
 }

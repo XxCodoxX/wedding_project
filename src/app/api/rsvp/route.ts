@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { decryptGuestId } from "@/lib/crypto";
+import { isInviteExpired } from "@/lib/invite-expiry";
 import { RSVP_MESSAGE_MAX_LENGTH, isMissingRsvpMessageColumn, parseRsvpMessage } from "@/lib/rsvp-message";
 
 type RsvpStatus = "attending" | "not_attending";
@@ -48,14 +49,18 @@ export async function POST(request: Request) {
 
     const supabase = createServerClient();
 
-    const allowedIds = await getInvitationGuestIds(
+    const invitation = await getInvitationGuestIds(
       supabase,
       body.code,
       responses.map((r) => r.guestId)
     );
-    if (!allowedIds) {
+    if (!invitation) {
       return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
     }
+    if (invitation.expired) {
+      return NextResponse.json({ error: "RSVPs for this invitation have closed" }, { status: 410 });
+    }
+    const allowedIds = invitation.ids;
     if (responses.some((r) => !allowedIds.has(r.guestId))) {
       return NextResponse.json(
         { error: "This invitation can't respond for that guest" },
@@ -86,22 +91,27 @@ export async function POST(request: Request) {
 
 /**
  * The guest IDs an invite code may RSVP for: the invited guest plus, for a
- * couple/family, the rest of their group. Null when the code is invalid.
+ * couple/family, the rest of their group — and whether the link has expired
+ * (see lib/invite-expiry.ts). Null when the code is invalid.
  */
 async function getInvitationGuestIds(
   supabase: ReturnType<typeof createServerClient>,
   code: string,
   requestedIds: string[]
-): Promise<Set<string> | null> {
+): Promise<{ ids: Set<string>; expired: boolean } | null> {
   const inviteGuestId = decryptGuestId(code);
   if (!inviteGuestId) return null;
 
   const { data: invitee } = await supabase
     .from("guests")
-    .select("id, group_id")
+    .select("id, group_id, weddings(wedding_date)")
     .eq("id", inviteGuestId)
     .single();
   if (!invitee) return null;
+
+  const rawWedding = invitee.weddings as { wedding_date: string } | { wedding_date: string }[] | null;
+  const weddingDate = Array.isArray(rawWedding) ? rawWedding[0]?.wedding_date : rawWedding?.wedding_date;
+  if (isInviteExpired(weddingDate)) return { ids: new Set(), expired: true };
 
   const allowed = new Set<string>([invitee.id]);
 
@@ -114,7 +124,7 @@ async function getInvitationGuestIds(
     for (const member of members ?? []) allowed.add(member.id);
   }
 
-  return allowed;
+  return { ids: allowed, expired: false };
 }
 
 /**

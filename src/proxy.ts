@@ -1,5 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthMiddlewareClient } from "@/lib/supabase-auth";
+import {
+  LAST_ACTIVE_COOKIE,
+  checkAdminSession,
+  createLastActiveCookie,
+  lastActiveCookieOptions,
+} from "@/lib/admin-session";
+
+/** Verify the session and apply the app's session limits (see lib/admin-session.ts). */
+async function verifyAdmin(request: NextRequest) {
+  const auth = await createAuthMiddlewareClient(request);
+  if (!auth.claims) return { ...auth, verdict: null };
+  const verdict = await checkAdminSession(auth.claims, request.cookies.get(LAST_ACTIVE_COOKIE)?.value);
+  return { ...auth, verdict };
+}
+
+/**
+ * End an over-limit session: revoke its refresh token (this session only — the admin's other
+ * devices are unaffected), then hand back a response carrying the cleared auth cookies.
+ */
+async function endSession(
+  auth: Awaited<ReturnType<typeof createAuthMiddlewareClient>>,
+  redirectTo: URL | null
+): Promise<NextResponse> {
+  await auth.supabase.auth.signOut({ scope: "local" });
+  const cleared = auth.getResponse();
+  const response = redirectTo ? NextResponse.redirect(redirectTo) : cleared;
+  if (redirectTo) cleared.cookies.getAll().forEach((c) => response.cookies.set(c));
+  response.cookies.delete(LAST_ACTIVE_COOKIE);
+  return response;
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -27,11 +57,13 @@ export async function proxy(request: NextRequest) {
       return NextResponse.next();
     }
 
-    const { user, response } = await createAuthMiddlewareClient(request);
-    if (user) {
+    const auth = await verifyAdmin(request);
+    if (auth.verdict === "ok") {
       return NextResponse.redirect(new URL("/admin/events", request.url));
     }
-    return response;
+    // A leftover over-limit session: clear it so the login form starts clean.
+    if (auth.verdict) return endSession(auth, null);
+    return auth.getResponse();
   }
 
   // If no auth cookie at all, immediately redirect to login (0 external API calls)
@@ -51,17 +83,25 @@ export async function proxy(request: NextRequest) {
   }
 
   // For real user page navigation, verify authentication and refresh session cookies
-  const { user, response } = await createAuthMiddlewareClient(request);
+  const auth = await verifyAdmin(request);
 
-  if (!user) {
+  if (!auth.claims) {
     const loginUrl = new URL("/admin/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
+  if (auth.verdict !== "ok") {
+    const loginUrl = new URL("/admin/login", request.url);
+    loginUrl.searchParams.set("reason", auth.verdict === "idle" ? "idle" : "expired");
+    return endSession(auth, loginUrl);
+  }
+
+  // A real page request is activity: restart the idle clock.
+  const response = auth.getResponse();
+  response.cookies.set(LAST_ACTIVE_COOKIE, await createLastActiveCookie(auth.claims.session_id), lastActiveCookieOptions);
   return response;
 }
 
 export const config = {
   matcher: ["/admin/:path*"],
 };
-

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createAuthServerClient } from "@/lib/supabase-auth";
+import { LAST_ACTIVE_COOKIE, createLastActiveCookie, lastActiveCookieOptions } from "@/lib/admin-session";
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +34,15 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+
+    // Start the idle clock for this session (see lib/admin-session.ts).
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const sessionId = claimsData?.claims?.session_id;
+    if (!sessionId) {
+      return NextResponse.json({ error: "Could not start a session" }, { status: 500 });
+    }
+    const cookieStore = await cookies();
+    cookieStore.set(LAST_ACTIVE_COOKIE, await createLastActiveCookie(sessionId), lastActiveCookieOptions);
 
     return NextResponse.json({ success: true });
   } catch {

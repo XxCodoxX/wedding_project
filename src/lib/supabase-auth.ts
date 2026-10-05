@@ -62,7 +62,14 @@ export async function createAuthMiddlewareClient(request: NextRequest) {
 
   // Verifies the JWT (locally, via the cached JWKS) and refreshes the session if it's about to expire.
   const { data } = await supabase.auth.getClaims();
-  const user = data?.claims?.sub ? { id: data.claims.sub } : null;
+  const claims = data?.claims?.sub ? data.claims : null;
+  const user = claims ? { id: claims.sub } : null;
 
-  return { supabase, user, response: supabaseResponse };
+  return {
+    supabase,
+    user,
+    claims,
+    /** The response carrying any cookies Supabase wrote — call it AFTER signOut() etc., which replace it. */
+    getResponse: () => supabaseResponse,
+  };
 }

@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { cache } from "react";
+import { cache, type ReactNode } from "react";
 import { decryptGuestId } from "@/lib/crypto";
 import { createServerClient } from "@/lib/supabase";
 import type { Guest, Wedding } from "@/lib/supabase";
@@ -8,6 +8,7 @@ import Image from "next/image";
 import { after } from "next/server";
 import { cookies, headers } from "next/headers";
 import { hasAdminSessionCookie, isLinkPreviewBot, isPrefetchRequest } from "@/lib/invite-tracking";
+import { isInviteExpired } from "@/lib/invite-expiry";
 
 interface PageProps {
   params: Promise<{ code: string }>;
@@ -120,6 +121,11 @@ export default async function InvitePage({ params }: PageProps) {
   }
   const { guest: typedGuest, wedding, groupMembers } = invite;
 
+  // Links close INVITE_GRACE_DAYS after the wedding. Not counted as an open — nothing to track.
+  if (isInviteExpired(wedding.wedding_date)) {
+    return <InviteEndedPage wedding={wedding} />;
+  }
+
   const TemplateComponent = TEMPLATE_COMPONENTS[wedding.template_id];
   if (!TemplateComponent) {
     return <NotFoundPage />;
@@ -152,8 +158,29 @@ export default async function InvitePage({ params }: PageProps) {
   );
 }
 
-// ---------- Not Found Page ----------
+// ---------- Not Found / Ended Pages ----------
 function NotFoundPage() {
+  return (
+    <MessagePage title="Invitation Not Found">
+      We couldn&apos;t find this invitation. Please check the link you
+      received and try again. If you believe this is an error, please
+      contact the couple directly.
+    </MessagePage>
+  );
+}
+
+function InviteEndedPage({ wedding }: { wedding: Wedding }) {
+  const couple =
+    wedding.groom_name && wedding.bride_name ? `${wedding.groom_name} & ${wedding.bride_name}` : "the couple";
+  return (
+    <MessagePage title="This Celebration Has Passed">
+      Thank you for being part of {couple}&apos;s special day. This invitation
+      is no longer active, and RSVPs have closed.
+    </MessagePage>
+  );
+}
+
+function MessagePage({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="min-h-screen bg-cream flex items-center justify-center px-6">
       <div className="text-center max-w-md">
@@ -167,12 +194,10 @@ function NotFoundPage() {
           />
         </div>
         <h1 className="font-cormorant text-4xl text-navy mb-4">
-          Invitation Not Found
+          {title}
         </h1>
         <p className="font-outfit text-navy/60 text-sm leading-relaxed">
-          We couldn&apos;t find this invitation. Please check the link you
-          received and try again. If you believe this is an error, please
-          contact the couple directly.
+          {children}
         </p>
         <div className="flex items-center justify-center gap-4 mt-8">
           <span className="block w-12 h-px bg-gold/30" />

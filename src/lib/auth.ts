@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
+import { LAST_ACTIVE_COOKIE, checkAdminSession } from "@/lib/admin-session";
 import { createAuthServerClient } from "@/lib/supabase-auth";
 import { createServerClient } from "@/lib/supabase";
 
@@ -26,12 +28,16 @@ export interface AuthUser {
  *
  * Uses getClaims(): with the project's asymmetric (ES256) signing key the JWT is verified
  * locally against the cached JWKS, so this costs no Auth API round trip (getUser() always did).
+ * Sessions past the app's limits (lib/admin-session.ts) count as signed out. The proxy ends them on
+ * the next admin page load; this check also covers API routes and actions the proxy doesn't run for.
  * Memoized per request so layout + page share one check.
  */
 export const getAuthUser = cache(async function getAuthUser(): Promise<AuthUser | null> {
-  const supabase = await createAuthServerClient();
+  const [supabase, cookieStore] = await Promise.all([createAuthServerClient(), cookies()]);
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims?.sub) return null;
+  const verdict = await checkAdminSession(data.claims, cookieStore.get(LAST_ACTIVE_COOKIE)?.value);
+  if (verdict !== "ok") return null;
   const { sub, email, user_metadata } = data.claims;
   return { id: sub, email, user_metadata };
 });
