@@ -52,7 +52,8 @@ jobs:
           fi
 
           # Only user-facing changes release; docs/chore/test-only pushes wait for the next one.
-          if git log "$LAST_TAG..HEAD" --format='%s%n%b' | grep -qE '^(feat|fix|perf)(\([^)]*\))?!?:|^BREAKING CHANGE'; then
+          # Same rule Vercel uses to skip the pre-release deploy (scripts/vercel-ignore-build.sh).
+          if bash scripts/has-releasable-commits.sh "$LAST_TAG..HEAD"; then
             echo "mode=bump" >> "$GITHUB_OUTPUT"
           else
             echo "Nothing to release since $LAST_TAG"

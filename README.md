@@ -51,6 +51,10 @@ Versions follow [Semantic Versioning](https://semver.org) and are derived from t
 `CHANGELOG.md`, commits `chore(release): vX.Y.Z`, tags it and publishes a GitHub Release.
 Pushes with only `docs:` / `chore:` / `refactor:` etc. don't release; they ride along in the next one.
 
+On Vercel, a push that will be released is not deployed itself — only the release commit that
+follows it is (`scripts/vercel-ignore-build.sh`), so each release builds once with the right version.
+If the release workflow fails, re-run it in GitHub Actions to deploy.
+
 Because the workflow pushes a release commit back to `main`, pull before your next push:
 
 ```bash

@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (Vercel, GitHub Actions) — never check them out with CRLF.
+*.sh text eol=lf
