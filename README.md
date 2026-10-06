@@ -46,27 +46,15 @@ Versions follow [Semantic Versioning](https://semver.org) and are derived from t
 | any `feat:` | minor — `1.0.0 → 1.1.0` |
 | `feat!:` or a `BREAKING CHANGE:` footer | major — `1.0.0 → 2.0.0` |
 
-**Releases are automatic.** Every push to `main` runs `.github/workflows/release.yml`: if there are
-`feat:` / `fix:` / `perf:` (or breaking) commits since the last tag, it bumps the version, updates
-`CHANGELOG.md`, commits `chore(release): vX.Y.Z`, tags it and publishes a GitHub Release.
-Pushes with only `docs:` / `chore:` / `refactor:` etc. don't release; they ride along in the next one.
+**Releases are automatic** ([semantic-release](https://semantic-release.gitbook.io), config in
+`.releaserc.json`). Every push to `main` runs `.github/workflows/release.yml`: if there are
+`feat:` / `fix:` / `perf:` (or breaking) commits since the last tag, it tags the next version
+(`vX.Y.Z`) and publishes a GitHub Release with the notes. Pushes with only `docs:` / `chore:` /
+`refactor:` etc. don't release; they ride along in the next one.
 
-On Vercel, a push that will be released is not deployed itself — only the release commit that
-follows it is (`scripts/vercel-ignore-build.sh`), so each release builds once with the right version.
-If the release workflow fails, re-run it in GitHub Actions to deploy.
+Nothing is committed back to `main` — the version lives only in the git tag — so there is no need
+to pull after a release. Release notes are on the repo's **Releases** page (`CHANGELOG.md` only
+covers releases up to v1.1.1).
 
-Because the workflow pushes a release commit back to `main`, pull before your next push:
-
-```bash
-git pull --rebase
-```
-
-Manual release (optional, e.g. to force a version):
-
-```bash
-npm run release:dry                      # preview, changes nothing
-npm run release -- --release-as 2.0.0    # bump, changelog, commit, tag
-git push --follow-tags origin main       # the tag push publishes the GitHub Release
-```
-
-The running version (and commit on Vercel) is shown at the bottom of the admin sidebar.
+Vercel deploys every push to `main` as usual. The admin sidebar shows the deployed commit; match it
+to a version on the Releases page.

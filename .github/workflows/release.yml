@@ -1,21 +1,18 @@
-# Automatic releases.
+# Automatic releases with semantic-release (config: .releaserc.json).
 #
-# Push to main → if there are feat:/fix:/perf: (or breaking) commits since the last tag, this bumps
-# the version from those commit messages, updates CHANGELOG.md, commits "chore(release): vX.Y.Z",
-# tags it, pushes both back to main, and publishes a GitHub Release with that version's notes.
-# The very first run (no tags yet) releases v1.0.0.
-#
-# The release commit is pushed with GITHUB_TOKEN, which never triggers workflows — so it can't loop.
-# A tag pushed by hand (`npm run release` locally) still gets its GitHub Release via the tag trigger.
+# Push to main → if there are feat:/fix:/perf: (or breaking) commits since the last tag, this works
+# out the next version from those commit messages, tags it and publishes a GitHub Release with the
+# notes. Nothing is committed back to main, so you never have to pull after a release.
 name: Release
 
 on:
   push:
     branches: [main]
-    tags: ["v*.*.*"]
 
 permissions:
-  contents: write
+  contents: write # create the tag and the GitHub Release
+  issues: write # comment on issues fixed by a release (and open one if a release fails)
+  pull-requests: write # comment on PRs included in a release
 
 # Two quick pushes must not both try to cut the same version.
 concurrency:
@@ -25,8 +22,6 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Skip a hand-pushed release commit on main (its tag push releases it instead).
-    if: ${{ github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'chore(release)') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,64 +29,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Decide whether to release
-        id: check
-        run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "mode=tag" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
-          if [ -z "$LAST_TAG" ]; then
-            echo "No release yet — cutting v1.0.0"
-            echo "mode=first" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Only user-facing changes release; docs/chore/test-only pushes wait for the next one.
-          # Same rule Vercel uses to skip the pre-release deploy (scripts/vercel-ignore-build.sh).
-          if bash scripts/has-releasable-commits.sh "$LAST_TAG..HEAD"; then
-            echo "mode=bump" >> "$GITHUB_OUTPUT"
-          else
-            echo "Nothing to release since $LAST_TAG"
-            echo "mode=skip" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Bump version, update changelog, commit and tag
-        if: steps.check.outputs.mode == 'first' || steps.check.outputs.mode == 'bump'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          ARGS=""
-          [ "${{ steps.check.outputs.mode }}" = "first" ] && ARGS="--release-as 1.0.0"
-          npx --yes commit-and-tag-version@13 $ARGS
-          git push --follow-tags origin HEAD:main
-          echo "TAG=$(git describe --tags --abbrev=0)" >> "$GITHUB_ENV"
-
-      - name: Use the pushed tag
-        if: steps.check.outputs.mode == 'tag'
-        run: echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
-
-      - name: Extract this version's changelog section
-        if: steps.check.outputs.mode != 'skip'
-        run: |
-          VERSION="${TAG#v}"
-          # From this version's heading up to (not including) the next version heading.
-          awk -v ver="$VERSION" '
-            /^#+ \[?[0-9]+\.[0-9]+\.[0-9]+/ {
-              v = $0; sub(/^#+ \[?/, "", v); sub(/[] (].*/, "", v)
-              if (found) exit
-              if (v == ver) { found = 1; next }
-            }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          [ -s release-notes.md ] || echo "See CHANGELOG.md for details." > release-notes.md
-
-      - name: Create GitHub Release
-        if: steps.check.outputs.mode != 'skip'
+      # Run from npx rather than devDependencies: the app doesn't need it, and CI pins the versions here.
+      - name: Release
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$TAG" --title "$TAG" --notes-file release-notes.md --verify-tag
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npx --yes -p semantic-release@25 -p conventional-changelog-conventionalcommits@9 semantic-release

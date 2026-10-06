@@ -1,14 +1,12 @@
 {
   "name": "wedding-invite",
-  "version": "1.1.0",
+  "version": "0.0.0-development",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "release": "commit-and-tag-version",
-    "release:dry": "commit-and-tag-version --dry-run"
+    "lint": "eslint"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -29,7 +27,6 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "commit-and-tag-version": "^13.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
