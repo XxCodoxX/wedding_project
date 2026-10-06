@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import ProjectLogo from "@/components/common/ProjectLogo";
+import PasswordInput from "@/components/common/PasswordInput";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -115,9 +116,8 @@ export default function AdminLoginPage() {
                   Forgot password?
                 </Link>
               </div>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

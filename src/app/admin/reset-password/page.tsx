@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
+import PasswordInput from "@/components/common/PasswordInput";
 import AuthCard, { authButtonClass, authInputClass } from "@/components/admin/AuthCard";
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -65,9 +66,8 @@ export default function ResetPasswordPage() {
           <label htmlFor="password" className="block text-sm font-medium text-admin-text-muted mb-2">
             New Password
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -83,9 +83,8 @@ export default function ResetPasswordPage() {
           <label htmlFor="confirm" className="block text-sm font-medium text-admin-text-muted mb-2">
             Confirm New Password
           </label>
-          <input
+          <PasswordInput
             id="confirm"
-            type="password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             required

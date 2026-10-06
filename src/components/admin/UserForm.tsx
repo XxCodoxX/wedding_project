@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
+import PasswordInput from "@/components/common/PasswordInput";
 
 interface WeddingOption {
   id: string;
@@ -159,10 +160,9 @@ export default function UserForm({ mode, profileId, initialData, weddings, onSub
         <label htmlFor="password" className="block text-sm font-medium text-admin-text-muted mb-2">
           {mode === "create" ? "Password" : "New Password (leave blank to keep current)"}
         </label>
-        <input
+        <PasswordInput
           id="password"
           name={mode === "create" ? "password" : "new_password"}
-          type="password"
           required={mode === "create"}
           minLength={6}
           className="w-full px-4 py-3 rounded-xl bg-admin-bg border border-admin-border text-admin-text placeholder-admin-text-muted/50 focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all"
