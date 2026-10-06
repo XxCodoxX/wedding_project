@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.1.0](https://github.com/XxCodoxX/wedding_project/compare/v1.0.0...v1.1.0) (2026-10-06)
+
+### Features
+
+* add forgot/reset password flow for admin accounts ([a95c856](https://github.com/XxCodoxX/wedding_project/commit/a95c856eb288baad7575bdf72fd20817a6d48957))
+
 ## 1.0.0 (2026-10-05)
 
 ### Features
