@@ -50,8 +50,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow the login page through
-  if (pathname === "/admin/login") {
+  // Password reset form: needs the recovery session from /auth/confirm, which by design has no
+  // activity cookie and so fails the session limits. Require only a verified session here; every
+  // other admin page still rejects it, and the reset API signs it out once the password is changed.
+  if (pathname === "/admin/reset-password") {
+    if (!hasAuthCookie) {
+      return NextResponse.redirect(new URL("/admin/forgot-password?error=invalid-link", request.url));
+    }
+    const auth = await createAuthMiddlewareClient(request);
+    if (!auth.claims) {
+      return NextResponse.redirect(new URL("/admin/forgot-password?error=invalid-link", request.url));
+    }
+    return auth.getResponse();
+  }
+
+  // Allow the signed-out pages (login, forgot password) through
+  if (pathname === "/admin/login" || pathname === "/admin/forgot-password") {
     // If no auth cookie, immediately let them see the login form without calling Supabase API
     if (!hasAuthCookie) {
       return NextResponse.next();

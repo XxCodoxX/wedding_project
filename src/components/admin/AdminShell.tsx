@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import type { UserProfile } from "@/lib/auth";
 import ProjectLogo from "@/components/common/ProjectLogo";
 
+const SIGNED_OUT_PAGES = ["/admin/login", "/admin/forgot-password", "/admin/reset-password"];
+
 interface AdminShellProps {
   children: React.ReactNode;
   initialProfile: UserProfile | null;
@@ -53,8 +55,8 @@ export default function AdminShell({
     };
   }, [sidebarOpen]);
 
-  // Don't wrap the login page with the sidebar layout
-  if (pathname === "/admin/login") {
+  // Don't wrap the signed-out pages with the sidebar layout
+  if (SIGNED_OUT_PAGES.includes(pathname)) {
     return <>{children}</>;
   }
 

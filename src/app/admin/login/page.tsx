@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import ProjectLogo from "@/components/common/ProjectLogo";
@@ -100,12 +101,20 @@ export default function AdminLoginPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-admin-text-muted mb-2"
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-admin-text-muted"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/admin/forgot-password"
+                  className="text-xs text-admin-accent hover:text-admin-accent-light transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
@@ -150,6 +159,7 @@ export default function AdminLoginPage() {
 const SESSION_ENDED_MESSAGES: Record<string, string> = {
   expired: "Your session has expired. Please sign in again.",
   idle: "You were signed out after a period of inactivity. Please sign in again.",
+  "password-reset": "Your password has been updated. Please sign in with your new password.",
 };
 
 function SessionEndedNotice() {
