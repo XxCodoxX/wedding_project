@@ -94,9 +94,6 @@ export default async function DashboardPage({ params }: PageProps) {
   const guestList: Guest[] = guests || [];
   const guestGroups = groupGuests(guestList);
 
-  // Guest group id → name. Guests without one (e.g. a deleted group) show the default group.
-  const categoryNames = Object.fromEntries(categories.map((c) => [c.id, c.name]));
-  const defaultCategoryName = defaultCategory(categories)?.name ?? null;
 
   // Stats
   const totalInvitations = guestGroups.length;
@@ -211,8 +208,8 @@ export default async function DashboardPage({ params }: PageProps) {
         wedding={wedding}
         groups={guestGroups}
         totalPeople={totalPeople}
-        categoryNames={categoryNames}
-        defaultCategoryName={defaultCategoryName}
+        categories={categories.map(({ id, name }) => ({ id, name }))}
+        defaultCategoryId={defaultCategory(categories)?.id ?? null}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import { getInviteStatus, parseInviteFilter, type InviteFilter } from "@/lib/inv
 import { matchesSideFilter, parseSideFilter, sideLabel, type GuestSide, type SideFilter } from "@/lib/guest-side";
 import { matchesRsvpFilter, parseRsvpFilter, type RsvpFilter } from "@/lib/rsvp-filter";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, paginate, parsePage, parsePageSize, type PageSize } from "@/lib/pagination";
+import { parseCategoryFilter, type CategoryFilter, type GuestCategory } from "@/lib/guest-category";
 import GuestPagination from "./GuestPagination";
 
 /** One invitation row (a group, or an individual guest). Built on the server — the invite code needs the secret key. */
@@ -32,10 +33,10 @@ interface GuestTableProps {
   groups: GuestGroup[];
   /** People (not invitations) in the whole list, for the side summary line. */
   totalPeople: number;
-  /** Guest group id → name. Empty before migration 18 (the Group column is then hidden). */
-  categoryNames: Record<string, string>;
-  /** Shown for guests without a group. Null before migration 18. */
-  defaultCategoryName: string | null;
+  /** Guest groups, default first. Empty before migration 18 (the group column and filter are then hidden). */
+  categories: Pick<GuestCategory, "id" | "name">[];
+  /** Guests without a group (or whose group no longer exists) count as this one. Null before migration 18. */
+  defaultCategoryId: string | null;
 }
 
 const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
@@ -58,18 +59,31 @@ function scrollResultsUnderBar(results: HTMLElement | null, bar: HTMLElement | n
  * updated with the native History API, which Next.js syncs into useSearchParams WITHOUT a server
  * round trip — so switching tabs is instant instead of re-running auth + queries + the loading skeleton.
  */
-export default function GuestTable({ weddingId, wedding, groups, totalPeople, categoryNames, defaultCategoryName }: GuestTableProps) {
-  const showCategory = defaultCategoryName !== null;
+export default function GuestTable({ weddingId, wedding, groups, totalPeople, categories, defaultCategoryId }: GuestTableProps) {
+  const showCategory = defaultCategoryId !== null;
+  const categoryNames = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  // The group an invitation counts under: its own, or the default when unset / deleted.
+  const categoryIdOf = useMemo(() => {
+    return (g: GuestGroup) => {
+      const id = g.primaryGuest.category_id;
+      return id && categoryNames.has(id) ? id : defaultCategoryId;
+    };
+  }, [categoryNames, defaultCategoryId]);
   const categoryOf = (g: GuestGroup) => {
-    const id = g.primaryGuest.category_id;
-    return (id && categoryNames[id]) || defaultCategoryName;
+    const id = categoryIdOf(g);
+    return id ? (categoryNames.get(id) ?? null) : null;
   };
+  const categoryTabs = useMemo(
+    () => [{ value: "all" as CategoryFilter, label: "All groups" }, ...categories.map((c) => ({ value: c.id, label: c.name }))],
+    [categories]
+  );
 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const filter = parseInviteFilter(searchParams.get("filter") ?? undefined);
   const sideFilter = parseSideFilter(searchParams.get("side") ?? undefined);
   const rsvpFilter = parseRsvpFilter(searchParams.get("rsvp") ?? undefined);
+  const groupFilter = parseCategoryFilter(searchParams.get("group"), categories);
   const urlQuery = parseSearchQuery(searchParams.get("q") ?? undefined);
   // Typing stays responsive on big lists; the table catches up a frame later.
   const query = useDeferredValue(urlQuery);
@@ -91,7 +105,9 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
 
   // Each filter's counts follow the search AND the other filters, so the numbers always add up.
   // Counts are people (guests), not invitations: a family of 4 counts as 4.
-  const { visibleGroups, deliveryCounts, sideCounts, rsvpCounts } = useMemo(() => {
+  const { visibleGroups, deliveryCounts, sideCounts, rsvpCounts, categoryCounts } = useMemo(() => {
+    const matchesCategory = (g: GuestGroup, f: CategoryFilter) => f === "all" || categoryIdOf(g) === f;
+
     const countBy = <T extends string>(
       tabs: readonly { value: T }[],
       base: GuestGroup[],
@@ -111,17 +127,22 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
         matches(g, value) ? membersWithRsvp(g, rsvpFilter) : 0;
 
     // Groups passing every filter except the one being counted.
-    const exceptDelivery = searchedGroups.filter((g) => matchesSide(g, sideFilter) && matchesRsvp(g, rsvpFilter));
-    const exceptSide = searchedGroups.filter((g) => matchesDelivery(g, filter) && matchesRsvp(g, rsvpFilter));
-    const exceptRsvp = searchedGroups.filter((g) => matchesDelivery(g, filter) && matchesSide(g, sideFilter));
+    const inGroup = searchedGroups.filter((g) => matchesCategory(g, groupFilter));
+    const exceptDelivery = inGroup.filter((g) => matchesSide(g, sideFilter) && matchesRsvp(g, rsvpFilter));
+    const exceptSide = inGroup.filter((g) => matchesDelivery(g, filter) && matchesRsvp(g, rsvpFilter));
+    const exceptRsvp = inGroup.filter((g) => matchesDelivery(g, filter) && matchesSide(g, sideFilter));
+    const exceptCategory = searchedGroups.filter(
+      (g) => matchesDelivery(g, filter) && matchesSide(g, sideFilter) && matchesRsvp(g, rsvpFilter)
+    );
 
     return {
       visibleGroups: exceptRsvp.filter((g) => matchesRsvp(g, rsvpFilter)),
       deliveryCounts: countBy(DELIVERY_TABS, exceptDelivery, rsvpMembersIf(matchesDelivery)),
       sideCounts: countBy(SIDE_TABS, exceptSide, rsvpMembersIf(matchesSide)),
       rsvpCounts: countBy(RSVP_TABS, exceptRsvp, membersWithRsvp),
+      categoryCounts: countBy(categoryTabs, exceptCategory, rsvpMembersIf(matchesCategory)),
     };
-  }, [searchedGroups, filter, sideFilter, rsvpFilter]);
+  }, [searchedGroups, filter, sideFilter, rsvpFilter, groupFilter, categoryIdOf, categoryTabs]);
 
   // ---------- Pagination (client-side slice of the filtered list) ----------
   const pageSize = parsePageSize(searchParams.get("per"));
@@ -169,7 +190,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
   }, [hasGuests]);
 
   // Filtering or paging from deep in the list: once the new results render, bring their top up under the bar.
-  const resultsKey = `${filter}|${sideFilter}|${rsvpFilter}|${urlQuery}|${pageWindow.page}|${pageSize}`;
+  const resultsKey = `${filter}|${sideFilter}|${rsvpFilter}|${groupFilter}|${urlQuery}|${pageWindow.page}|${pageSize}`;
   useLayoutEffect(() => {
     if (!scrollPendingRef.current) return;
     scrollPendingRef.current = false;
@@ -183,7 +204,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
     else scrollResultsUnderBar(resultsRef.current, barRef.current); // e.g. Enter on the same search
   };
 
-  const applyFromBar = (next: { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; q?: string }) => {
+  const applyFromBar = (next: FilterChange) => {
     window.history.pushState(null, "", hrefFor(next));
     afterBarChange();
   };
@@ -195,7 +216,8 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
     document.getElementById("guest-search")?.focus({ preventScroll: true });
   };
 
-  const activeFilterCount = [filter !== "all", sideFilter !== "all", rsvpFilter !== "all", urlQuery !== ""].filter(Boolean).length;
+  const activeFilterCount = [filter !== "all", sideFilter !== "all", rsvpFilter !== "all", groupFilter !== "all", urlQuery !== ""].filter(Boolean).length;
+  const anyFilter = filter !== "all" || sideFilter !== "all" || rsvpFilter !== "all" || groupFilter !== "all";
 
   const compactFilters: CompactFilter[] = [
     {
@@ -224,15 +246,26 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
       options: RSVP_TABS.map((t) => ({ value: t.value, label: t.label, count: rsvpCounts[t.value] })),
       onChange: (v) => applyFromBar({ rsvp: parseRsvpFilter(v) }),
     },
+    ...(showCategory
+      ? [
+          {
+            label: "Filter by guest group",
+            value: groupFilter,
+            options: categoryTabs.map((t) => ({ value: t.value, label: t.label, count: categoryCounts[t.value] ?? 0 })),
+            onChange: (v: string) => applyFromBar({ group: parseCategoryFilter(v, categories) }),
+          },
+        ]
+      : []),
   ];
 
-  const hrefFor = (next: { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; q?: string }) => {
+  const hrefFor = (next: FilterChange) => {
     const params = new URLSearchParams(searchParams.toString());
     const set = (key: string, value: string, empty: string) =>
       value && value !== empty ? params.set(key, value) : params.delete(key);
     if (next.side !== undefined) set("side", next.side, "all");
     if (next.rsvp !== undefined) set("rsvp", next.rsvp, "all");
     if (next.filter !== undefined) set("filter", next.filter, "all");
+    if (next.group !== undefined) set("group", next.group, "all");
     if (next.q !== undefined) set("q", next.q, "");
     // A different filter or search is a different list — start it from page 1.
     params.delete("page");
@@ -297,7 +330,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
         filters={compactFilters}
         activeCount={activeFilterCount}
         onQueryChange={afterBarChange}
-        onClear={() => applyFromBar({ filter: "all", side: "all", rsvp: "all", q: "" })}
+        onClear={() => applyFromBar({ filter: "all", side: "all", rsvp: "all", group: "all", q: "" })}
         onBackToFilters={backToFilters}
       />
 
@@ -392,6 +425,34 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
             );
           })}
         </nav>
+
+        {/* Guest group filter (Family, Friends, ...) */}
+        {showCategory && categories.length > 1 && (
+          <nav aria-label="Filter by guest group" className="flex flex-wrap gap-2 mb-6 -mt-2">
+            {categoryTabs.map((tab) => {
+              const active = groupFilter === tab.value;
+              return (
+                <a
+                  key={tab.value}
+                  href={hrefFor({ group: tab.value })}
+                  onClick={navigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm border transition-all ${
+                    active
+                      ? "border-teal-500 bg-teal-500/10 text-teal-400"
+                      : "border-admin-border text-admin-text-muted hover:text-admin-text hover:border-admin-accent/40"
+                  }`}
+                >
+                  <span aria-hidden>{tab.value === "all" ? "🗂️" : "🏷️"}</span>
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? "bg-black/10" : "bg-admin-border/30"}`}>
+                    {categoryCounts[tab.value] ?? 0}
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+        )}
       </div>
 
       <div ref={resultsRef} className={padResults ? "min-h-screen" : undefined}>
@@ -403,11 +464,11 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
 
         {visibleGroups.length === 0 ? (
           <div className="glass-dark rounded-2xl p-12 text-center">
-            <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" && rsvpFilter === "all" ? "🎉" : "🔍"}</div>
+            <div className="text-4xl mb-3" aria-hidden>{filter === "not_sent" && !query && sideFilter === "all" && rsvpFilter === "all" && groupFilter === "all" ? "🎉" : "🔍"}</div>
             <p className="text-admin-text-muted text-sm">
               {query
-                ? <>No invitations match &ldquo;{query}&rdquo;{filter !== "all" || sideFilter !== "all" || rsvpFilter !== "all" ? " in this filter" : ""}.</>
-                : filter === "not_sent" && sideFilter === "all" && rsvpFilter === "all"
+                ? <>No invitations match &ldquo;{query}&rdquo;{anyFilter ? " in this filter" : ""}.</>
+                : filter === "not_sent" && sideFilter === "all" && rsvpFilter === "all" && groupFilter === "all"
                   ? "Every invitation has been sent."
                   : "No invitations match this filter."}
             </p>
@@ -472,6 +533,8 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople, ca
     </>
   );
 }
+
+type FilterChange = { filter?: InviteFilter; side?: SideFilter; rsvp?: RsvpFilter; group?: CategoryFilter; q?: string };
 
 const DELIVERY_TABS: { value: InviteFilter; label: string; icon: string }[] = [
   { value: "all", label: "All", icon: "💌" },

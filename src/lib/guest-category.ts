@@ -60,6 +60,16 @@ export async function fetchGuestCategories(
   return { categories: (data ?? []) as GuestCategory[] };
 }
 
+// ---------- Dashboard filter (?group=) ----------
+
+/** "all", or a guest group id. */
+export type CategoryFilter = "all" | (string & {});
+
+/** URL value → filter. Unknown ids (e.g. a deleted group) fall back to "all". */
+export function parseCategoryFilter(value: string | null | undefined, categories: Pick<GuestCategory, "id">[]): CategoryFilter {
+  return value && categories.some((c) => c.id === value) ? value : "all";
+}
+
 // ---------- Migration fallback ----------
 
 /** True when the `guest_categories` table doesn't exist yet (migration 18 not run). */
