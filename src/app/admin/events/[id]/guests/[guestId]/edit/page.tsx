@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import Link from "next/link";
 import Breadcrumbs from "@/components/admin/Breadcrumbs";
+import { fetchGuestCategories } from "@/lib/guest-category";
 
 interface PageProps {
   params: Promise<{ id: string; guestId: string }>;
@@ -23,14 +24,15 @@ export default async function EditGuestPage({ params }: PageProps) {
 
   const supabase = createServerClient();
 
-  // Guest + wedding are independent — fetch in parallel.
-  const [{ data: guest, error: guestError }, { data: wedding, error: weddingError }] = await Promise.all([
+  // Guest, wedding and guest groups are independent — fetch in parallel.
+  const [{ data: guest, error: guestError }, { data: wedding, error: weddingError }, { categories }] = await Promise.all([
     supabase.from("guests").select("*").eq("id", guestId).single(),
     supabase
       .from("weddings")
       .select("id, groom_name, bride_name, wedding_date, venue_name, whatsapp_message_template")
       .eq("id", weddingId)
       .single(),
+    fetchGuestCategories(supabase),
   ]);
 
   if (guestError || !guest || weddingError || !wedding) {
@@ -93,11 +95,13 @@ export default async function EditGuestPage({ params }: PageProps) {
         weddingId={weddingId}
         wedding={wedding}
         guest={guest}
+        categories={categories}
         initialData={{
           guest_name: guest.guest_name,
           custom_message: guest.custom_message,
           phone: guest.phone ?? null,
           guest_side: guest.guest_side ?? null,
+          category_id: guest.category_id ?? null,
           invitation_type: invitationType,
           group_label: guest.group_label || null,
           members: groupMembers.length > 0 ? groupMembers : undefined,

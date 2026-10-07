@@ -9,6 +9,13 @@ import { normalizePhone, isMissingPhoneColumn, PHONE_MIGRATION_ERROR } from "@/l
 import { isMissingTrackingColumn, TRACKING_MIGRATION_ERROR } from "@/lib/invite-tracking";
 import { parseGuestSide, isMissingSideColumn, SIDE_MIGRATION_ERROR, type GuestSide } from "@/lib/guest-side";
 import {
+  fetchGuestCategories,
+  defaultCategory,
+  findCategoryByName,
+  isMissingCategoryColumn,
+  CATEGORY_MIGRATION_ERROR,
+} from "@/lib/guest-category";
+import {
   importPayloadSchema,
   findDuplicates,
   type ExistingInvitation,
@@ -331,6 +338,11 @@ export async function createGuest(formData: FormData) {
 
   const supabase = createServerClient();
 
+  const category = await resolveCategoryId(supabase, formData.get("category_id"));
+  if ("error" in category) return { error: category.error };
+  // Like the side: only sent when known, so guests still save before migration 18 is run.
+  const categoryField = category.id ? { category_id: category.id } : {};
+
   // ---------- Individual invitation ----------
   if (invitationType === "individual") {
     const { data: guest, error: insertError } = await supabase
@@ -345,6 +357,7 @@ export async function createGuest(formData: FormData) {
         is_primary: true,
         ...phoneField,
         ...sideField,
+        ...categoryField,
       })
       .select()
       .single();
@@ -354,6 +367,9 @@ export async function createGuest(formData: FormData) {
     }
     if (isMissingSideColumn(insertError)) {
       return { error: SIDE_MIGRATION_ERROR };
+    }
+    if (isMissingCategoryColumn(insertError)) {
+      return { error: CATEGORY_MIGRATION_ERROR };
     }
     if (insertError || !guest) {
       return { error: insertError?.message || "Failed to create guest" };
@@ -400,6 +416,7 @@ export async function createGuest(formData: FormData) {
     is_primary: idx === 0,
     ...(idx === 0 ? phoneField : {}),
     ...sideField,
+    ...categoryField,
   }));
 
   const { data: insertedGuests, error: insertError } = await supabase
@@ -412,6 +429,9 @@ export async function createGuest(formData: FormData) {
   }
   if (isMissingSideColumn(insertError)) {
     return { error: SIDE_MIGRATION_ERROR };
+  }
+  if (isMissingCategoryColumn(insertError)) {
+    return { error: CATEGORY_MIGRATION_ERROR };
   }
   if (insertError || !insertedGuests || insertedGuests.length === 0) {
     return { error: insertError?.message || "Failed to create guest group" };
@@ -429,7 +449,17 @@ type GuestInsert = Omit<Guest, "rsvp_status" | "created_at">;
 export interface ImportGuestsResult {
   success?: boolean;
   error?: string;
-  created?: { guestId: string; name: string; type: InvitationType; members: string[]; phone: string | null; side: GuestSide | null; code: string }[];
+  created?: {
+    guestId: string;
+    name: string;
+    type: InvitationType;
+    members: string[];
+    phone: string | null;
+    side: GuestSide | null;
+    /** Guest group name, or null before migration 18. */
+    group: string | null;
+    code: string;
+  }[];
   skipped?: { row: number; name: string; reason: string }[];
 }
 
@@ -445,7 +475,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
     return { error: row ? `Row ${row}: ${issue.message}` : issue.message };
   }
 
-  const { weddingId, invitations } = parsed.data;
+  const { weddingId, invitations, defaultCategoryId } = parsed.data;
 
   if (!(await canAccessWedding(weddingId))) {
     return { error: "Unauthorized: You don't have access to this event" };
@@ -453,6 +483,32 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
 
   try {
     const supabase = createServerClient();
+
+    // Group names in the file → ids. Blank cells get the group picked in the importer (or "Other").
+    const { categories, error: categoryError } = await fetchGuestCategories(supabase);
+    if (categoryError) return { error: `Failed to load guest groups: ${categoryError}` };
+    const fallbackCategory = defaultCategoryId
+      ? categories.find((c) => c.id === defaultCategoryId)
+      : defaultCategory(categories);
+    if (defaultCategoryId && !fallbackCategory) {
+      return { error: categories.length ? "The selected guest group no longer exists" : CATEGORY_MIGRATION_ERROR };
+    }
+    const categoryByRow = new Map<number, { id: string; name: string }>();
+    for (const inv of invitations) {
+      const match = inv.group ? findCategoryByName(categories, inv.group) : fallbackCategory;
+      if (inv.group && !match) {
+        return {
+          error: categories.length
+            ? `Row ${inv.row}: Unknown guest group "${inv.group}". Add it under Settings → Guest Groups first.`
+            : CATEGORY_MIGRATION_ERROR,
+        };
+      }
+      if (match) categoryByRow.set(inv.row, match);
+    }
+    const categoryOf = (inv: ImportInvitation) => {
+      const match = categoryByRow.get(inv.row);
+      return match ? { category_id: match.id } : {};
+    };
 
     // Re-check duplicates against the CURRENT guest list (it may have changed since the preview).
     const existing = await fetchExistingInvitations(supabase, weddingId);
@@ -498,6 +554,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
           is_primary: true,
           ...phoneOf(inv),
           ...sideOf(inv),
+          ...categoryOf(inv),
         }];
       }
       const groupId = crypto.randomUUID();
@@ -512,6 +569,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
         is_primary: idx === 0,
         ...(idx === 0 ? phoneOf(inv) : {}),
         ...sideOf(inv),
+        ...categoryOf(inv),
       }));
     });
 
@@ -521,6 +579,9 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
     }
     if (isMissingSideColumn(insertError)) {
       return { error: SIDE_MIGRATION_ERROR };
+    }
+    if (isMissingCategoryColumn(insertError)) {
+      return { error: CATEGORY_MIGRATION_ERROR };
     }
     if (insertError) {
       return { error: `Import failed, no guests were added: ${insertError.message}` };
@@ -535,6 +596,7 @@ export async function importGuests(payload: unknown): Promise<ImportGuestsResult
       members: inv.members,
       phone: inv.phone,
       side: inv.side,
+      group: categoryByRow.get(inv.row)?.name ?? null,
       code: encryptGuestId(primaries[i].id),
     }));
 
@@ -570,6 +632,9 @@ export async function updateGuest(guestId: string, formData: FormData) {
     return { error: "Guest name is required" };
   }
 
+  const category = await resolveCategoryId(supabase, formData.get("category_id"));
+  if ("error" in category) return { error: category.error };
+
   // ---------- Individual invitation ----------
   if (invitationType === "individual") {
     // If converting from group to individual, delete other group members
@@ -602,6 +667,9 @@ export async function updateGuest(guestId: string, formData: FormData) {
 
     const sideError = await saveGuestSide(supabase, { guestId }, guestSide);
     if (sideError) return { error: sideError };
+
+    const categoryError = await saveGuestCategory(supabase, { guestId }, category.id);
+    if (categoryError) return { error: categoryError };
 
     revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
     revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
@@ -696,6 +764,10 @@ export async function updateGuest(guestId: string, formData: FormData) {
   // Applies to every member, including ones just added.
   const sideError = await saveGuestSide(supabase, { groupId }, guestSide);
   if (sideError) return { error: sideError };
+
+  // Members just added got the database default, so this also covers them.
+  const categoryError = await saveGuestCategory(supabase, { groupId }, category.id);
+  if (categoryError) return { error: categoryError };
 
   revalidatePath(`/admin/events/${targetWeddingId}/dashboard`);
   revalidatePath(`/admin/events/${targetWeddingId}/guests/${guestId}/edit`);
@@ -859,6 +931,45 @@ async function saveGuestSide(
   // Column not created yet and nothing to store → nothing to do.
   if (isMissingSideColumn(error)) return side ? SIDE_MIGRATION_ERROR : null;
   return `Failed to save guest side: ${error.message}`;
+}
+
+// ---------- Helper: Resolve Guest Group ----------
+/**
+ * Form value → guest group id. Blank means the default ("Other") group.
+ * `id: null` only before migration 18 is run (no groups yet), so the column is left out.
+ */
+async function resolveCategoryId(
+  supabase: ReturnType<typeof createServerClient>,
+  raw: FormDataEntryValue | null
+): Promise<{ id: string | null } | { error: string }> {
+  const requested = typeof raw === "string" ? raw.trim() : "";
+  const { categories, error } = await fetchGuestCategories(supabase);
+  if (error) return { error: `Failed to load guest groups: ${error}` };
+
+  if (categories.length === 0) {
+    return requested ? { error: CATEGORY_MIGRATION_ERROR } : { id: null };
+  }
+  if (!requested) return { id: defaultCategory(categories)?.id ?? null };
+
+  // Only ids that exist — never trust the posted value.
+  const match = categories.find((c) => c.id === requested);
+  return match ? { id: match.id } : { error: "The selected guest group no longer exists. Please pick another." };
+}
+
+// ---------- Helper: Save Guest Group ----------
+/** Sets the group on one guest or a whole invitation. Returns an error message, or null on success. */
+async function saveGuestCategory(
+  supabase: ReturnType<typeof createServerClient>,
+  target: { guestId: string } | { groupId: string },
+  categoryId: string | null
+): Promise<string | null> {
+  // No groups yet (migration 18 not run) → nothing to store.
+  if (!categoryId) return null;
+  const update = supabase.from("guests").update({ category_id: categoryId });
+  const { error } = await ("guestId" in target ? update.eq("id", target.guestId) : update.eq("group_id", target.groupId));
+  if (!error) return null;
+  if (isMissingCategoryColumn(error)) return CATEGORY_MIGRATION_ERROR;
+  return `Failed to save guest group: ${error.message}`;
 }
 
 // ---------- Helper: Authorize Guest ----------

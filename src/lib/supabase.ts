@@ -36,6 +36,8 @@ export interface Guest {
   phone?: string | null;
   /** Bride's or groom's side, on every member of an invitation. Undefined until migration 14 is run. */
   guest_side?: "bride" | "groom" | null;
+  /** Guest group (guest_categories.id), on every member of an invitation. Undefined until migration 18 is run. */
+  category_id?: string | null;
   /** Delivery tracking (primary guest only). Undefined until migration 12 is run. */
   invite_sent_at?: string | null;
   invite_first_opened_at?: string | null;

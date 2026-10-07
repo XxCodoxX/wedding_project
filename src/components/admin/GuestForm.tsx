@@ -9,6 +9,7 @@ import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import type { Wedding, Guest } from "@/lib/supabase";
 import { normalizePhone } from "@/lib/phone";
 import { sideLabel, type GuestSide } from "@/lib/guest-side";
+import { defaultCategory, type GuestCategory } from "@/lib/guest-category";
 
 type InvitationType = "individual" | "couple" | "family";
 
@@ -23,11 +24,14 @@ interface GuestFormProps {
   weddingId: string;
   wedding?: Partial<Wedding> | null;
   guest?: Partial<Guest> | null;
+  /** Guest groups to pick from. Empty before migration 18 (the field is then hidden). */
+  categories?: Pick<GuestCategory, "id" | "name" | "is_default">[];
   initialData?: {
     guest_name: string;
     custom_message: string | null;
     phone?: string | null;
     guest_side?: GuestSide | null;
+    category_id?: string | null;
     invitation_type?: InvitationType;
     group_label?: string | null;
     members?: MemberEntry[];
@@ -42,6 +46,7 @@ export default function GuestForm({
   weddingId,
   wedding,
   guest,
+  categories = [],
   initialData,
   inviteCode,
   onSubmit,
@@ -59,6 +64,11 @@ export default function GuestForm({
   );
   const [phone, setPhone] = useState(initialData?.phone || "");
   const [guestSide, setGuestSide] = useState<GuestSide | "">(initialData?.guest_side || "");
+  // A guest whose group was deleted (or not set yet) starts on the default group.
+  const [categoryId, setCategoryId] = useState(() => {
+    const current = initialData?.category_id;
+    return (current && categories.some((c) => c.id === current) ? current : defaultCategory(categories)?.id) ?? "";
+  });
   const phoneCheck = normalizePhone(phone);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -114,6 +124,7 @@ export default function GuestForm({
       formData.set("custom_message", customMessage);
       formData.set("phone", phone);
       formData.set("guest_side", guestSide);
+      if (categories.length > 0) formData.set("category_id", categoryId);
 
       if (invitationType === "individual") {
         formData.set("guest_name", guestName);
@@ -405,6 +416,31 @@ export default function GuestForm({
               : "Helps you filter and count guests by bride's or groom's side"}
           </p>
         </fieldset>
+
+        {/* ── Guest Group ── */}
+        {categories.length > 0 && (
+          <div>
+            <label htmlFor="category_id" className="block text-sm font-medium text-admin-text-muted mb-2">
+              Guest Group
+            </label>
+            <select
+              id="category_id"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              aria-describedby="category-hint"
+              className="w-full px-4 py-3 rounded-xl bg-admin-bg border border-admin-border text-admin-text focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent transition-all cursor-pointer"
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <p id="category-hint" className="mt-1.5 text-xs text-admin-text-muted/60">
+              e.g. Family, Friends, School friends{invitationType === "individual" ? "" : " — applies to every member"}
+            </p>
+          </div>
+        )}
 
         {/* ── WhatsApp Number ── */}
         <div>

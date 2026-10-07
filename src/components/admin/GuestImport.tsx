@@ -15,6 +15,7 @@ import {
 } from "@/lib/guest-import";
 import { ACCEPTED_EXTENSIONS, readSpreadsheet, toCsv } from "@/lib/guest-import-reader";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/phone";
+import { defaultCategory, type GuestCategory } from "@/lib/guest-category";
 import SectionLoadingOverlay from "@/components/common/SectionLoadingOverlay";
 import CopyLinkButtonClient from "@/app/admin/events/[id]/dashboard/CopyLinkButtonClient";
 
@@ -23,6 +24,8 @@ interface GuestImportProps {
   wedding: Partial<Wedding>;
   /** Invitations already in this event (name + phone), for duplicate warnings. */
   existing: ExistingInvitation[];
+  /** Guest groups; the file's Group column must match one. Empty before migration 18. */
+  categories: Pick<GuestCategory, "id" | "name" | "is_default">[];
   /** Called once invitations were created (e.g. to refresh the guest list behind a modal). */
   onImported?: () => void;
   /** Reports reading/importing so a parent modal can block closing mid-import. */
@@ -42,8 +45,11 @@ const TYPE_ICON: Record<ImportInvitation["type"], string> = {
   family: "👨‍👩‍👧‍👦",
 };
 
-export default function GuestImport({ weddingId, wedding, existing, onImported, onBusyChange, onClose }: GuestImportProps) {
+export default function GuestImport({ weddingId, wedding, existing, categories, onImported, onBusyChange, onClose }: GuestImportProps) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
+  // Group for rows whose Group cell is blank.
+  const [defaultCategoryId, setDefaultCategoryId] = useState(() => defaultCategory(categories)?.id ?? "");
+  const defaultCategoryName = categories.find((c) => c.id === defaultCategoryId)?.name ?? null;
   const [reading, setReading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -72,7 +78,7 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
     setReading(true);
     try {
       const rows = await readSpreadsheet(file);
-      const analysis = analyzeSheet(rows);
+      const analysis = analyzeSheet(rows, categories.map((c) => c.name));
       if (analysis.fatal) {
         setError(analysis.fatal);
         setStage({ kind: "idle" });
@@ -89,7 +95,7 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
       setReading(false);
       if (inputRef.current) inputRef.current.value = ""; // allow re-selecting the same file
     }
-  }, []);
+  }, [categories]);
 
   const handleImport = async () => {
     if (stage.kind !== "preview") return;
@@ -99,6 +105,7 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
       const result = await importGuests({
         weddingId,
         invitations: stage.analysis.valid,
+        defaultCategoryId: defaultCategoryId || null,
       });
       if (result.error) {
         setError(result.error);
@@ -123,8 +130,8 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
     if (stage.kind !== "done") return;
     const origin = window.location.origin;
     const csv = toCsv([
-      ["Type", "Name", "Members", "Phone", "Side", "Invite Link"],
-      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), c.phone ?? "", c.side ?? "", `${origin}/invite/${c.code}`]),
+      ["Type", "Name", "Members", "Phone", "Side", "Group", "Invite Link"],
+      ...stage.result.created.map((c) => [c.type, c.name, c.members.join("; "), c.phone ?? "", c.side ?? "", c.group ?? "", `${origin}/invite/${c.code}`]),
     ]);
     // BOM so Excel opens UTF-8 names (Sinhala/Tamil etc.) correctly.
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -153,7 +160,7 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
 
       {stage.kind === "idle" && (
         <>
-          <FormatGuide />
+          <FormatGuide groupNames={categories.map((c) => c.name)} />
 
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -186,6 +193,10 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
           fileName={stage.fileName}
           analysis={stage.analysis}
           duplicateRows={duplicateRows}
+          categories={categories}
+          defaultCategoryId={defaultCategoryId}
+          defaultCategoryName={defaultCategoryName}
+          onDefaultCategoryChange={setDefaultCategoryId}
           importing={importing}
           onImport={handleImport}
           onCancel={reset}
@@ -242,9 +253,9 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
                       <div className="text-sm font-medium text-admin-text truncate">
                         <span aria-hidden>{TYPE_ICON[c.type]}</span> {c.name}
                       </div>
-                      {(c.members.length > 0 || c.phone) && (
+                      {(c.members.length > 0 || c.phone || c.group) && (
                         <div className="text-xs text-admin-text-muted truncate">
-                          {[c.members.join(", "), c.phone].filter(Boolean).join(" · ")}
+                          {[c.members.join(", "), c.phone, c.group].filter(Boolean).join(" · ")}
                         </div>
                       )}
                     </div>
@@ -262,7 +273,7 @@ export default function GuestImport({ weddingId, wedding, existing, onImported, 
 
 // ────────────────────────── Sub-components ──────────────────────────
 
-function FormatGuide() {
+function FormatGuide({ groupNames }: { groupNames: string[] }) {
   return (
     <div className="glass-dark rounded-2xl p-6 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -293,6 +304,16 @@ function FormatGuide() {
             <tr><td className="py-2 pr-4 font-mono">Members</td><td className="py-2 pr-4 text-admin-text-muted">Couple/Family</td><td className="py-2">Each person who can RSVP, separated by <code>;</code> (or one per line inside the cell). Couple = exactly 2, Family = 2 or more. Leave blank for individuals.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Phone</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">WhatsApp number, e.g. <code>0771234567</code> or <code>+94771234567</code>. Numbers without a country code get <code>+{DEFAULT_COUNTRY_CODE}</code>. One number per invitation.</td></tr>
             <tr><td className="py-2 pr-4 font-mono">Side</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2"><code>groom</code> or <code>bride</code> — whose side invited them. Leave blank to decide later.</td></tr>
+            {groupNames.length > 0 && (
+              <tr>
+                <td className="py-2 pr-4 font-mono">Group</td>
+                <td className="py-2 pr-4 text-admin-text-muted">No</td>
+                <td className="py-2">
+                  One of your guest groups: {groupNames.map((n, i) => <span key={n}>{i > 0 && ", "}<code>{n}</code></span>)}.
+                  Leave blank to use the default group you pick after uploading.
+                </td>
+              </tr>
+            )}
             <tr><td className="py-2 pr-4 font-mono">Message</td><td className="py-2 pr-4 text-admin-text-muted">No</td><td className="py-2">Optional personal note on the invitation.</td></tr>
           </tbody>
         </table>
@@ -305,12 +326,27 @@ interface PreviewProps {
   fileName: string;
   analysis: SheetAnalysis;
   duplicateRows: Map<number, string>;
+  categories: Pick<GuestCategory, "id" | "name">[];
+  defaultCategoryId: string;
+  defaultCategoryName: string | null;
+  onDefaultCategoryChange: (id: string) => void;
   importing: boolean;
   onImport: () => void;
   onCancel: () => void;
 }
 
-function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCancel }: PreviewProps) {
+function Preview({
+  fileName,
+  analysis,
+  duplicateRows,
+  categories,
+  defaultCategoryId,
+  defaultCategoryName,
+  onDefaultCategoryChange,
+  importing,
+  onImport,
+  onCancel,
+}: PreviewProps) {
   const { valid, invalid, ignoredColumns } = analysis;
   // Duplicates are never added — the table shows exactly what will be created.
   const toAdd = valid.filter((v) => !duplicateRows.has(v.row));
@@ -334,6 +370,25 @@ function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCan
         <Stat label="Errors" value={String(invalid.length)} tone={invalid.length ? "danger" : undefined} />
         <Stat label="Duplicates" value={String(duplicateRows.size)} tone={duplicateRows.size ? "warning" : undefined} />
       </div>
+
+      {categories.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <label htmlFor="import-default-group" className="text-sm text-admin-text-muted">
+            Guest group for rows without one
+          </label>
+          <select
+            id="import-default-group"
+            value={defaultCategoryId}
+            onChange={(e) => onDefaultCategoryChange(e.target.value)}
+            disabled={importing}
+            className="px-3 py-2 rounded-xl bg-admin-bg border border-admin-border text-admin-text text-sm focus:outline-none focus:ring-2 focus:ring-admin-accent/50 focus:border-admin-accent"
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {ignoredColumns.length > 0 && (
         <p className="text-xs text-admin-text-muted">Ignored unknown columns: {ignoredColumns.join(", ")}</p>
@@ -377,6 +432,7 @@ function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCan
                   <th className="px-4 py-3">Members</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Side</th>
+                  {categories.length > 0 && <th className="px-4 py-3">Group</th>}
                   <th className="px-4 py-3">Message</th>
                 </tr>
               </thead>
@@ -389,6 +445,11 @@ function Preview({ fileName, analysis, duplicateRows, importing, onImport, onCan
                     <td className="px-4 py-2.5 text-admin-text-muted">{inv.members.join(", ") || "—"}</td>
                     <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap">{inv.phone || "—"}</td>
                     <td className="px-4 py-2.5 text-admin-text-muted whitespace-nowrap capitalize">{inv.side || "—"}</td>
+                    {categories.length > 0 && (
+                      <td className={`px-4 py-2.5 whitespace-nowrap ${inv.group ? "text-admin-text" : "text-admin-text-muted"}`}>
+                        {inv.group ?? defaultCategoryName ?? "—"}
+                      </td>
+                    )}
                     <td className="px-4 py-2.5 text-admin-text-muted max-w-60 truncate">{inv.message || "—"}</td>
                   </tr>
                 ))}

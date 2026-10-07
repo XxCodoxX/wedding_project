@@ -10,6 +10,7 @@ import GuestTable, { type GuestGroup } from "./GuestTable";
 import { getInviteStatus } from "@/lib/invite-tracking";
 import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
+import { fetchGuestCategories, defaultCategory } from "@/lib/guest-category";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export default async function DashboardPage({ params }: PageProps) {
   // Wedding + guests in parallel. Filters (?filter=, ?side=, ?q=) are applied client-side in GuestTable.
   // Rows inserted together (a family, a bulk import) share created_at, and Postgres returns ties in
   // no fixed order — an UPDATE (e.g. an RSVP change) would reshuffle them. `id` makes the order stable.
-  const [{ data: wedding, error: weddingError }, { data: guests, error }] = await Promise.all([
+  const [{ data: wedding, error: weddingError }, { data: guests, error }, { categories }] = await Promise.all([
     supabase.from("weddings").select("*").eq("id", weddingId).single(),
     supabase
       .from("guests")
@@ -83,6 +84,7 @@ export default async function DashboardPage({ params }: PageProps) {
       .eq("wedding_id", weddingId)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false }),
+    fetchGuestCategories(supabase),
   ]);
 
   if (weddingError || !wedding) {
@@ -91,6 +93,10 @@ export default async function DashboardPage({ params }: PageProps) {
 
   const guestList: Guest[] = guests || [];
   const guestGroups = groupGuests(guestList);
+
+  // Guest group id → name. Guests without one (e.g. a deleted group) show the default group.
+  const categoryNames = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+  const defaultCategoryName = defaultCategory(categories)?.name ?? null;
 
   // Stats
   const totalInvitations = guestGroups.length;
@@ -139,6 +145,7 @@ export default async function DashboardPage({ params }: PageProps) {
             weddingId={weddingId}
             wedding={wedding}
             existing={guestGroups.map((g) => ({ name: g.label, phone: g.primaryGuest.phone ?? null }))}
+            categories={categories}
           />
           <Link
             href={`/admin/events/${weddingId}/guests/new`}
@@ -199,7 +206,14 @@ export default async function DashboardPage({ params }: PageProps) {
       )}
 
       {/* Filters + table run client-side, so switching filters needs no server round trip. */}
-      <GuestTable weddingId={weddingId} wedding={wedding} groups={guestGroups} totalPeople={totalPeople} />
+      <GuestTable
+        weddingId={weddingId}
+        wedding={wedding}
+        groups={guestGroups}
+        totalPeople={totalPeople}
+        categoryNames={categoryNames}
+        defaultCategoryName={defaultCategoryName}
+      />
     </div>
   );
 }

@@ -1,8 +1,8 @@
-Type,Name,Members,Phone,Side,Message
-individual,Sarah Johnson,,0771234567,bride,
-individual,Dr. Nuwan Perera,,+94 71 234 5678,groom,So glad you can make the trip from Kandy!
-couple,Mr. & Mrs. Fernando,Ruwan Fernando; Dilani Fernando,0712345678,groom,
-couple,,Kasun Silva; Tharushi Silva,,bride,
-family,The Silva Family,Sunil Silva; Kamala Silva; Nimesh Silva; Ayesha Silva,0761234567,bride,We can't wait to celebrate with all of you.
-,Amal Jayasinghe,,,,
-,,Chamara Bandara; Sachini Bandara,+447911123456,groom,
+Type,Name,Members,Phone,Side,Group,Message
+individual,Sarah Johnson,,0771234567,bride,,
+individual,Dr. Nuwan Perera,,+94 71 234 5678,groom,Other,So glad you can make the trip from Kandy!
+couple,Mr. & Mrs. Fernando,Ruwan Fernando; Dilani Fernando,0712345678,groom,,
+couple,,Kasun Silva; Tharushi Silva,,bride,,
+family,The Silva Family,Sunil Silva; Kamala Silva; Nimesh Silva; Ayesha Silva,0761234567,bride,,We can't wait to celebrate with all of you.
+,Amal Jayasinghe,,,,,
+,,Chamara Bandara; Sachini Bandara,+447911123456,groom,,

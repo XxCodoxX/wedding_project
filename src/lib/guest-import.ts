@@ -10,11 +10,13 @@
  *   Members  | People in a couple/family, separated by ; | , or new line
  *   Phone    | Optional WhatsApp number (0771234567 or +94771234567)
  *   Side     | Optional: groom / bride
+ *   Group    | Optional guest group (Family, Friends, ...) — must already exist in Settings → Guest Groups
  *   Message  | Optional personal note
  */
 import { z } from "zod";
 import { normalizePhone } from "@/lib/phone";
 import { GUEST_SIDES, type GuestSide } from "@/lib/guest-side";
+import { CATEGORY_NAME_MAX, findCategoryByName } from "@/lib/guest-category";
 
 export const IMPORT_LIMITS = {
   maxInvitations: 500,
@@ -45,6 +47,8 @@ export const importInvitationSchema = z
     // Already normalised to E.164 by normalizeRow; re-checked strictly on the server.
     phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Invalid phone number").nullable(),
     side: z.enum(GUEST_SIDES).nullable(),
+    /** Guest group NAME as written in the file; the server maps it to an id. Null → the importer's default group. */
+    group: z.string().trim().min(1).max(CATEGORY_NAME_MAX).nullable(),
   })
   .superRefine((inv, ctx) => {
     if (inv.type === "individual" && inv.members.length > 0) {
@@ -66,13 +70,15 @@ export const importPayloadSchema = z.object({
     .array(importInvitationSchema)
     .min(1, "No invitations to import")
     .max(IMPORT_LIMITS.maxInvitations, `You can import at most ${IMPORT_LIMITS.maxInvitations} invitations at once`),
+  /** Group for rows with a blank Group cell. Omitted → the default ("Other") group. */
+  defaultCategoryId: z.uuid("Invalid guest group").nullish(),
 });
 
 export type ImportPayload = z.infer<typeof importPayloadSchema>;
 
 // ---------- Header mapping ----------
 
-type Field = "type" | "name" | "members" | "message" | "phone" | "side";
+type Field = "type" | "name" | "members" | "message" | "phone" | "side" | "group";
 
 /** Accepted header spellings (compared after lowercasing & stripping non-letters). */
 const HEADER_ALIASES: Record<Field, string[]> = {
@@ -82,6 +88,8 @@ const HEADER_ALIASES: Record<Field, string[]> = {
   message: ["message", "custommessage", "note", "notes", "personalmessage"],
   phone: ["phone", "phonenumber", "mobile", "mobilenumber", "whatsapp", "whatsappnumber", "contact", "contactnumber", "tel", "telephone"],
   side: ["side", "guestside", "familyside", "invitedby", "relation"],
+  // Not "category" (already a Type alias) or "groupname" (a Name alias).
+  group: ["group", "guestgroup", "groups", "circle"],
 };
 
 const normalizeHeader = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
@@ -141,8 +149,9 @@ export type RowResult =
 /**
  * Turn one raw spreadsheet row into a validated invitation.
  * `rowNumber` is the 1-based line number in the file (for user-facing errors).
+ * `groupNames` are the existing guest groups; a Group cell must match one (ignoring case).
  */
-export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: number): RowResult {
+export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: number, groupNames: string[] = []): RowResult {
   const get = (f: Field) => (columns[f] === undefined ? "" : (cells[columns[f]!] ?? ""));
 
   let name = cleanText(get("name"));
@@ -157,6 +166,21 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
   }
   if (side === "invalid") {
     return { ok: false, row: rowNumber, errors: [`Unknown side "${get("side").trim()}" — use groom or bride`] };
+  }
+
+  // Use the saved spelling, so "family " and "Family" both import as "Family".
+  const rawGroup = cleanText(get("group"));
+  const group = rawGroup ? findCategoryByName(groupNames.map((name) => ({ name })), rawGroup)?.name : null;
+  if (rawGroup && !group) {
+    return {
+      ok: false,
+      row: rowNumber,
+      errors: [
+        groupNames.length
+          ? `Unknown group "${rawGroup}" — use one of: ${groupNames.join(", ")}`
+          : "Guest groups are not set up yet — leave the Group column blank",
+      ],
+    };
   }
 
   // Infer type from member count when the Type column is blank.
@@ -181,7 +205,7 @@ export function normalizeRow(cells: string[], columns: ColumnMap, rowNumber: num
     return { ok: false, row: rowNumber, errors: [phone.error] };
   }
 
-  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message, phone: phone.value, side });
+  const parsed = importInvitationSchema.safeParse({ row: rowNumber, type, name, members, message, phone: phone.value, side, group: group ?? null });
   if (!parsed.success) {
     return { ok: false, row: rowNumber, errors: [...new Set(parsed.error.issues.map((i) => i.message))] };
   }
@@ -241,8 +265,8 @@ export interface SheetAnalysis {
   ignoredColumns: string[];
 }
 
-/** `rows` = raw sheet including header row, every cell already stringified. */
-export function analyzeSheet(rows: string[][]): SheetAnalysis {
+/** `rows` = raw sheet including header row, every cell already stringified. `groupNames` = existing guest groups. */
+export function analyzeSheet(rows: string[][], groupNames: string[] = []): SheetAnalysis {
   const empty: SheetAnalysis = { fatal: null, valid: [], invalid: [], ignoredColumns: [] };
 
   const headerIdx = rows.findIndex((r) => r.some((c) => c.trim()));
@@ -262,7 +286,7 @@ export function analyzeSheet(rows: string[][]): SheetAnalysis {
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const cells = rows[i];
     if (!cells.some((c) => c.trim())) continue; // skip blank lines
-    const res = normalizeRow(cells, columns, i + 1);
+    const res = normalizeRow(cells, columns, i + 1, groupNames);
     if (res.ok) valid.push(res.invitation);
     else invalid.push({ row: res.row, errors: res.errors });
   }

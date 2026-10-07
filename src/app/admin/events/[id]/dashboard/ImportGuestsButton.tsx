@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { Wedding } from "@/lib/supabase";
 import type { ExistingInvitation } from "@/lib/guest-import";
+import type { GuestCategory } from "@/lib/guest-category";
 import AdminModal from "@/components/admin/AdminModal";
 
 // Lazy-load: the importer (and its CSV/Excel parsers) only downloads when the modal is opened.
@@ -17,9 +18,10 @@ interface ImportGuestsButtonProps {
   weddingId: string;
   wedding: Partial<Wedding>;
   existing: ExistingInvitation[];
+  categories: Pick<GuestCategory, "id" | "name" | "is_default">[];
 }
 
-export default function ImportGuestsButton({ weddingId, wedding, existing }: ImportGuestsButtonProps) {
+export default function ImportGuestsButton({ weddingId, wedding, existing, categories }: ImportGuestsButtonProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -53,6 +55,7 @@ export default function ImportGuestsButton({ weddingId, wedding, existing }: Imp
           weddingId={weddingId}
           wedding={wedding}
           existing={existing}
+          categories={categories}
           onImported={handleImported}
           onBusyChange={setBusy}
           onClose={close}

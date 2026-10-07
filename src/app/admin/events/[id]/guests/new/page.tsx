@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { getUserProfile, canAccessWedding } from "@/lib/auth";
 import Link from "next/link";
 import Breadcrumbs from "@/components/admin/Breadcrumbs";
+import { fetchGuestCategories } from "@/lib/guest-category";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -23,11 +24,10 @@ export default async function NewGuestPage({ params }: PageProps) {
   }
 
   const supabase = createServerClient();
-  const { data: wedding, error } = await supabase
-    .from("weddings")
-    .select("groom_name, bride_name")
-    .eq("id", weddingId)
-    .single();
+  const [{ data: wedding, error }, { categories }] = await Promise.all([
+    supabase.from("weddings").select("groom_name, bride_name").eq("id", weddingId).single(),
+    fetchGuestCategories(supabase),
+  ]);
 
   if (error || !wedding) {
     notFound();
@@ -54,7 +54,7 @@ export default async function NewGuestPage({ params }: PageProps) {
       </div>
 
       {/* Form */}
-      <GuestForm mode="create" onSubmit={createGuest} weddingId={weddingId} wedding={wedding} />
+      <GuestForm mode="create" onSubmit={createGuest} weddingId={weddingId} wedding={wedding} categories={categories} />
     </div>
   );
 }

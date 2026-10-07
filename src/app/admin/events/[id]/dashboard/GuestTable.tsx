@@ -32,6 +32,10 @@ interface GuestTableProps {
   groups: GuestGroup[];
   /** People (not invitations) in the whole list, for the side summary line. */
   totalPeople: number;
+  /** Guest group id → name. Empty before migration 18 (the Group column is then hidden). */
+  categoryNames: Record<string, string>;
+  /** Shown for guests without a group. Null before migration 18. */
+  defaultCategoryName: string | null;
 }
 
 const statusOf = (g: GuestGroup) => getInviteStatus(g.primaryGuest);
@@ -54,7 +58,13 @@ function scrollResultsUnderBar(results: HTMLElement | null, bar: HTMLElement | n
  * updated with the native History API, which Next.js syncs into useSearchParams WITHOUT a server
  * round trip — so switching tabs is instant instead of re-running auth + queries + the loading skeleton.
  */
-export default function GuestTable({ weddingId, wedding, groups, totalPeople }: GuestTableProps) {
+export default function GuestTable({ weddingId, wedding, groups, totalPeople, categoryNames, defaultCategoryName }: GuestTableProps) {
+  const showCategory = defaultCategoryName !== null;
+  const categoryOf = (g: GuestGroup) => {
+    const id = g.primaryGuest.category_id;
+    return (id && categoryNames[id]) || defaultCategoryName;
+  };
+
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const filter = parseInviteFilter(searchParams.get("filter") ?? undefined);
@@ -419,7 +429,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-admin-border">
-                      {["Guest / Group", "Type", "Side", "RSVP Status", "Invite", "Invite Link", "Created"].map((h) => (
+                      {["Guest / Group", "Type", "Side", ...(showCategory ? ["Guest Group"] : []), "RSVP Status", "Invite", "Invite Link", "Created"].map((h) => (
                         <th key={h} className="text-left text-xs font-medium text-admin-text-muted uppercase tracking-wider px-6 py-4">
                           {h}
                         </th>
@@ -431,7 +441,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
                   </thead>
                   <tbody className="divide-y divide-admin-border/50">
                     {pageGroups.map((group) => (
-                      <GuestRow key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
+                      <GuestRow key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} category={categoryOf(group)} />
                     ))}
                   </tbody>
                 </table>
@@ -441,7 +451,7 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
             {/* Mobile Card View */}
             <div className="space-y-3 md:hidden">
               {pageGroups.map((group) => (
-                <GuestCard key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} />
+                <GuestCard key={group.primaryGuest.id} group={group} wedding={wedding} weddingId={weddingId} category={categoryOf(group)} />
               ))}
             </div>
 
@@ -490,9 +500,11 @@ interface RowProps {
   group: GuestGroup;
   wedding: Wedding;
   weddingId: string;
+  /** Guest group name; null hides the column (migration 18 not run). */
+  category: string | null;
 }
 
-const GuestRow = memo(function GuestRow({ group, wedding, weddingId }: RowProps) {
+const GuestRow = memo(function GuestRow({ group, wedding, weddingId, category }: RowProps) {
   return (
     <tr className="hover:bg-admin-border/10 transition-colors">
       <td className="px-6 py-4">
@@ -513,6 +525,11 @@ const GuestRow = memo(function GuestRow({ group, wedding, weddingId }: RowProps)
       <td className="px-6 py-4">
         <SideBadge side={sideOf(group)} wedding={wedding} />
       </td>
+      {category !== null && (
+        <td className="px-6 py-4">
+          <CategoryBadge name={category} />
+        </td>
+      )}
       <td className="px-6 py-4">
         <GroupRsvp group={group} />
       </td>
@@ -534,7 +551,7 @@ const GuestRow = memo(function GuestRow({ group, wedding, weddingId }: RowProps)
   );
 });
 
-const GuestCard = memo(function GuestCard({ group, wedding, weddingId }: RowProps) {
+const GuestCard = memo(function GuestCard({ group, wedding, weddingId, category }: RowProps) {
   return (
     <div className="glass-dark rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -543,9 +560,10 @@ const GuestCard = memo(function GuestCard({ group, wedding, weddingId }: RowProp
             <div className="text-sm font-medium text-admin-text truncate">{group.label}</div>
             <TypeBadge type={group.type} count={group.members.length} />
           </div>
-          {group.primaryGuest.guest_side && (
-            <div className="mb-1">
-              <SideBadge side={group.primaryGuest.guest_side} wedding={wedding} />
+          {(group.primaryGuest.guest_side || category) && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              {group.primaryGuest.guest_side && <SideBadge side={group.primaryGuest.guest_side} wedding={wedding} />}
+              {category && <CategoryBadge name={category} />}
             </div>
           )}
           {group.type !== "individual" && (
@@ -662,6 +680,17 @@ function TypeBadge({ type, count }: { type: string; count: number }) {
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-medium border ${classes}`}
     >
       <span className="text-xs">{icon}</span> {label}
+    </span>
+  );
+}
+
+function CategoryBadge({ name }: { name: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-medium border whitespace-nowrap bg-teal-500/10 text-teal-400 border-teal-500/20"
+      title="Guest group"
+    >
+      <span className="text-xs" aria-hidden>🏷️</span> {name}
     </span>
   );
 }
