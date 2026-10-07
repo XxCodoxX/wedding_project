@@ -80,12 +80,23 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
   );
 
   // Each filter's counts follow the search AND the other filters, so the numbers always add up.
+  // Counts are people (guests), not invitations: a family of 4 counts as 4.
   const { visibleGroups, deliveryCounts, sideCounts, rsvpCounts } = useMemo(() => {
     const countBy = <T extends string>(
       tabs: readonly { value: T }[],
       base: GuestGroup[],
-      matches: (g: GuestGroup, value: T) => boolean
-    ) => Object.fromEntries(tabs.map((t) => [t.value, base.filter((g) => matches(g, t.value)).length])) as Record<T, number>;
+      peopleIn: (g: GuestGroup, value: T) => number
+    ) =>
+      Object.fromEntries(tabs.map((t) => [t.value, base.reduce((n, g) => n + peopleIn(g, t.value), 0)])) as Record<T, number>;
+
+    // Delivery and side belong to the whole invitation, so every member counts.
+    const allMembersIf =
+      <T,>(matches: (g: GuestGroup, value: T) => boolean) =>
+      (g: GuestGroup, value: T) =>
+        matches(g, value) ? g.members.length : 0;
+    // RSVP is per person: only members with that status count, so a split family isn't counted under both answers.
+    const membersWithRsvp = (g: GuestGroup, value: RsvpFilter) =>
+      value === "all" ? g.members.length : g.members.filter((m) => m.rsvp_status === value).length;
 
     // Groups passing every filter except the one being counted.
     const exceptDelivery = searchedGroups.filter((g) => matchesSide(g, sideFilter) && matchesRsvp(g, rsvpFilter));
@@ -94,9 +105,9 @@ export default function GuestTable({ weddingId, wedding, groups, totalPeople }: 
 
     return {
       visibleGroups: exceptRsvp.filter((g) => matchesRsvp(g, rsvpFilter)),
-      deliveryCounts: countBy(DELIVERY_TABS, exceptDelivery, matchesDelivery),
-      sideCounts: countBy(SIDE_TABS, exceptSide, matchesSide),
-      rsvpCounts: countBy(RSVP_TABS, exceptRsvp, matchesRsvp),
+      deliveryCounts: countBy(DELIVERY_TABS, exceptDelivery, allMembersIf(matchesDelivery)),
+      sideCounts: countBy(SIDE_TABS, exceptSide, allMembersIf(matchesSide)),
+      rsvpCounts: countBy(RSVP_TABS, exceptRsvp, membersWithRsvp),
     };
   }, [searchedGroups, filter, sideFilter, rsvpFilter]);
 
